@@ -1,1 +1,1 @@
-{"name":"ada-caglari","private":true,"type":"module","scripts":{"dev":"wrangler dev","deploy":"wrangler deploy","check":"node --check src/worker.mjs"},"devDependencies":{"wrangler":"^4.0.0"}}
+{"name":"ada-caglari","private":true,"type":"module","scripts":{"dev":"node build.mjs && wrangler dev","deploy":"node build.mjs && wrangler deploy","build":"node build.mjs","test":"node --test test/*.test.mjs","check":"node --check src/worker.mjs && node --check src/logic.mjs"},"devDependencies":{"wrangler":"^4.0.0"}}
