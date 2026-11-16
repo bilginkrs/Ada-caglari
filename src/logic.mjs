@@ -87,9 +87,44 @@ function aiBuild(island,index,kind,{starter=false}={}){
     const building={kind,x,y,size:kind==='koyun'?2:1,level:1,phase:0,fertility:island.fertility};
     building.path=workPath(building,index,island);
     if(building.path&&!building.path.length)continue;
+    if(!keepsAIPlotsReachable(island,index,depot,building))continue;
     if(!starter){island.stock.wood-=10;island.stock.stone-=5;}
     island.plots.push(building);
     return true;
+  }
+  return false;
+}
+
+function keepsAIPlotsReachable(island,index,depot,candidate){
+  const plots=[...island.plots,candidate];
+  const blocked=new Set();
+  const goals=new Map();
+  const key=(x,y)=>y*36+x;
+  for(const building of plots){
+    const size=building.size||1;
+    for(let dy=0;dy<size;dy++)for(let dx=0;dx<size;dx++){
+      const cell=key(building.x+dx,building.y+dy);
+      blocked.add(cell);
+      goals.set(cell,building);
+    }
+  }
+  const queue=[[depot.x,depot.y]];
+  const visited=new Set([key(depot.x,depot.y)]);
+  const reached=new Set();
+  for(let head=0;head<queue.length;head++){
+    const [x,y]=queue[head];
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=x+dx,ny=y+dy,cell=key(nx,ny);
+      if(nx<0||ny<0||nx>=36||ny>=36||visited.has(cell))continue;
+      visited.add(cell);
+      if(blocked.has(cell)){
+        reached.add(goals.get(cell));
+        continue;
+      }
+      if(['sea','lake','mountain','city'].includes(terrain(nx,ny,index,island)))continue;
+      queue.push([nx,ny]);
+    }
+    if(reached.size===plots.length)return true;
   }
   return false;
 }
