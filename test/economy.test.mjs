@@ -97,3 +97,42 @@ test('Kept research gives experience once at completion, not when started',()=>{
   tick(world);
   assert.equal(a.playerProgress.xp,40);
 });
+
+test('University requires the city tier and only awards points on its saved minute schedule',()=>{
+  let world=setup();
+  const [player]=world.players;
+  const island=world.islands[0];
+  const upgrade={type:'universityUpgrade',level:1};
+  assert.throws(()=>act(world,player,upgrade),/Kasaba/);
+  island.cityLevel=1;
+  island.stock.clothes=10;
+  act(world,player,upgrade);
+  assert.equal(island.universityLevel,1);
+  assert.equal(island.rp,0);
+  assert.equal(island.universityNextTick,60);
+  world.tick=58;
+  world=migrate(structuredClone(world));
+  tick(world);
+  assert.equal(world.islands[0].rp,0);
+  tick(world);
+  assert.equal(world.islands[0].rp,3);
+  tick(world);
+  assert.equal(world.islands[0].rp,3);
+});
+
+test('Advanced technologies enforce university tier before charging research points',()=>{
+  const world=setup();
+  const [player]=world.players;
+  const island=world.islands[0];
+  island.tech=['distribution','industry','machinery'];
+  island.rp=100;
+  Object.assign(island.stock,{machines:50,steel:100,copper:100});
+  island.universityLevel=1;
+  const research={type:'research',id:'combustion'};
+  assert.throws(()=>act(world,player,research),/Üniversite seviye 2/);
+  assert.equal(island.rp,100);
+  island.universityLevel=2;
+  act(world,player,research);
+  assert.equal(island.research.id,'combustion');
+  assert.equal(island.rp,40);
+});

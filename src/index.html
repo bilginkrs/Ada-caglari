@@ -33,7 +33,8 @@
 .city-silhouette{display:flex;justify-content:center;height:42px;align-items:center}
 .city-silhouette .pixel-preview{width:32px;height:32px;margin:0 -6px}
 .city-silhouette .pixel-preview:nth-child(even){transform:translateY(-5px)}
-.panel-action{position:sticky;bottom:0;padding:9px 0;background:#fff1cd}
+.panel-action{padding:9px 0}
+.city-drawer{margin-top:14px;border:1px solid #cbb486}.city-drawer>summary{font-weight:700}.city-drawer hr{border:0;border-top:1px solid #cbb486;margin:14px 0}
 .panel-action .primary-action{width:100%}
 .market-offer,.voyage-card{margin:12px 0;padding:10px;border:1px solid #c4a773;border-radius:7px;background:#f7e7bc}
 .gold-price:before{content:'';display:inline-block;width:.81em;height:.81em;margin-right:.35em;background:#e2b53e;border:2px solid #9c732a;border-radius:50%;vertical-align:-.07em}.market-offer-heading{margin-bottom:9px;font-variant-numeric:tabular-nums}
@@ -103,11 +104,11 @@
 #level-details-meter{height:11px}
 #level-summary{display:flex;align-items:baseline;justify-content:space-between;gap:7px}
 @media(max-width:680px){#player-level{min-width:59px}#player-level small{font-size:.68rem}}
-</style><header><div><small>ADA USTALIĞI · 1.7</small><h1>Ada Çağları</h1></div><div id="status">Birlikte bir dünya kurun.</div></header>
+</style><header><div><small>KIYILAR VE ÜNİVERSİTE · 1.8</small><h1>Ada Çağları</h1></div><div id="status">Birlikte bir dünya kurun.</div></header>
 <section id="lobby"><h2>İki kıyı, ortak bir hikâye.</h2><p>Ortak dünyada ikiniz de bağlıyken zaman ilerler. Test dünyasında tek başına oynayabilirsin.</p><input id="name" placeholder="Oyuncu adı" maxlength="24"><input id="room" placeholder="Ortak oda kodu"><button id="join">Birlikte oyna</button> <button id="invite">Davet bağlantısını kopyala</button><p><button id="solo">Tek başına test et</button></p><small>Test ilerlemesi ayrı kaydedilir.</small><p id="hint"></p></section>
 <main id="game" hidden><nav id="toolbar"><button id="menu">Menü</button><button id="world">Adalar</button><button id="home">Adam</button><button id="upgrades">Geliştirmeler</button><button id="storage">▣ Depo</button><button id="transport">Taşıma filosu</button></nav><div id="stockbar" aria-label="Temel stoklar"></div><canvas id="canvas"></canvas><aside id="panel" hidden><div class="panel-heading"><button id="close" aria-label="Paneli kapat">×</button><button id="panelBack" hidden>← Geri</button><h2 id="heading"></h2></div><div id="content"></div></aside><div id="toast" role="status" hidden></div><section id="trade-notice" aria-label="Takas bildirimleri" hidden><button id="trade-notice-toggle" aria-controls="trade-notice-list" aria-expanded="false">Takas teklifleri</button><div id="trade-notice-list" aria-live="polite" hidden></div></section></main>
 <script type="module">
-import {terrain as terrainAt, fertility, land, capacity, upgradeCost, technologies, occupied, workPath, cycleLength, pay, validBuild, price, loadCount, upgradeBuildingCost, horsePrice, CATEGORIES, technologies as treeData, mineralChoices, basePrices, nearWater, cityTier, cityTiers, transportStats, productionSources, recipes, progressionXP, xpForNextLevel, levelReward} from '/logic.js?v=17';
+import {terrain as terrainAt, fertility, land, capacity, upgradeCost, technologies, occupied, workPath, cycleLength, pay, validBuild, price, loadCount, upgradeBuildingCost, horsePrice, CATEGORIES, technologies as treeData, mineralChoices, basePrices, nearWater, cityTier, cityTiers, transportStats, productionSources, recipes, progressionXP, xpForNextLevel, levelReward, universityTiers} from '/logic.js?v=18';
 function terrain(x,y){return terrainAt(x,y,selected,state?.islands[selected])}
 const names={engines:'Motor',tin:'Kalay',silver:'Gümüş',bronze:'Bronz',silverware:'Gümüş eşya',tools:'Alet',wood:'Odun',stone:'Taş',food:'Yiyecek',wool:'Yün',yarn:'İplik',clothes:'Kıyafet',iron:'Demir',copper:'Bakır',coal:'Kömür',steel:'Çelik',machines:'Makine'},labels={motorAtolyesi:'Motor atölyesi',bronz:'Bronz dökümhanesi',gumusisleme:'Gümüş atölyesi',demirci:'Demirci',oduncu:'Oduncu',tas:'Taş ocağı',balik:'Balıkçı',koyun:'Koyun çiftliği',iplik:'İplikhane',terzi:'Terzi',demir:'Demir madeni',bakir:'Bakır madeni',liman:'Liman',komur:'Kömür madeni',celik:'Çelik atölyesi',makine:'Makine atölyesi'},terrainNames={grass:'Çayır',forest:'Orman',rock:'Kayalık',mountain:'Dağ',lake:'Göl',coast:'Kıyı',city:'Şehir',sea:'Deniz'};
 const el=id=>document.getElementById(id),canvas=el('canvas'),ctx=canvas.getContext('2d');let receivedAt=0;let ws,state,selected=0,view='island',zoom=1,pan={x:0,y:0},pick=null,panelMode=null,W=1000,H=700,anim=0,lastFrame=0;
@@ -131,6 +132,7 @@ const svgParts={wood:'<path fill="#8c5738" d="M4 10h23v15H4z"/><circle cx="5" cy
 svgParts.tools='<path fill="#bfc9c5" d="M4 3h22v9H4z"/><path fill="#ae7d4e" d="M12 10h7v21h-7z"/>';svgParts.tin=svgParts.iron;svgParts.silver=svgParts.iron;svgParts.bronze=svgParts.copper;svgParts.silverware=svgParts.machines||svgParts.iron;svgParts.coal='<path fill="#404d54" d="m3 24 4-14 12-5 10 13-5 9H8z"/>';svgParts.engines='<path fill="#647879" d="M4 8h20v17H4zM24 12h5v8h-5z"/><path fill="#e4c777" d="M8 4h11v5H8zM8 13h11v3H8zm0 6h11v3H8z"/>';svgParts.steel=svgParts.iron;svgParts.machines='<path fill="#c9b57f" d="M3 8h26v19H3z"/><circle cx="16" cy="17" r="7" fill="#526c73"/><circle cx="16" cy="17" r="3" fill="#dec799"/>';function icon(k){return '<svg class="icon" data-material="'+k+'" viewBox="0 0 32 32" role="img" aria-label="'+names[k]+'">'+svgParts[k]+'</svg>'}function cost(wood,stone){return '<div class="cost">'+icon('wood')+' '+wood+' Odun &nbsp; '+icon('stone')+' '+stone+' Taş</div>'}const panelHistory=[];
 function openPanel(mode){
   panelHistory.length=0;
+  if(mode==='cityNeeds')delete el('content').dataset.cityIsland;
   renderPanel(mode);
 }
 function openSubPanel(mode,configure){
@@ -192,7 +194,7 @@ el('world').onclick=()=>{view='world';preview=null;moving=null;pick=null;panelMo
 function poly(p,c){ctx.fillStyle=c;ctx.beginPath();p.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fill()}function legacyTree(x,y){ctx.fillStyle='#6a5034';ctx.fillRect(x-3,y-25,6,27);poly([[x-17,y-10],[x,y-54],[x+17,y-10]],'#214e3e');poly([[x-12,y-28],[x,y-63],[x+12,y-28]],'#3d7251')}
 function oldHouse(x,y,kind){if(kind==='liman'){for(let i=0;i<5;i++){ctx.fillStyle=i%2?'#a18054':'#bd9967';ctx.fillRect(x-23,y+i*5,46,4)}ctx.fillStyle='#5c4837';ctx.fillRect(x-21,y-25,4,48);ctx.fillRect(x+18,y-25,4,48);poly([[x-25,y-25],[x,y-43],[x+25,y-25],[x,y-10]],'#407b80');return;}poly([[x-17,y-20],[x,y-10],[x,y+10],[x-17,y]],'#d6bd8b');poly([[x,y-10],[x+20,y-22],[x+20,y-2],[x,y+10]],'#877858');poly([[x-22,y-23],[x-2,y-44],[x+24,y-25],[x,y-9]],kind==='tas'?'#6f7c7d':'#a95f46');ctx.fillStyle='#364c4c';ctx.fillRect(x+6,y-7,6,13);ctx.fillStyle='#f1df9c';ctx.fillRect(x-12,y-15,5,6);if(kind==='oduncu'){ctx.fillStyle='#94653e';ctx.fillRect(x-28,y+4,16,5);}if(kind==='tas')poly([[x+20,y+5],[x+27,y-7],[x+35,y+7]],'#b7c0bb');}
 function legacyPerson(x,y,phase){ctx.fillStyle='#ebc59c';ctx.fillRect(x-2,y-12,5,5);ctx.fillStyle='#dbad55';ctx.fillRect(x-3,y-7,7,7);ctx.fillStyle='#253d46';let d=Math.sin(phase)*2;ctx.fillRect(x-3,y,2,5+d);ctx.fillRect(x+2,y,2,5-d);ctx.strokeStyle='#c2c9bd';ctx.beginPath();ctx.moveTo(x+4,y-4);ctx.lineTo(x+10,y-11+Math.sin(phase)*5);ctx.stroke()}
-function draw(now){requestAnimationFrame(draw);if(!state||el('game').hidden)return;if(now-lastFrame<33)return;let dt=Math.min(100,now-lastFrame);lastFrame=now;if(state.running)anim+=dt/1000;ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#2f86b5';ctx.fillRect(0,0,W,H);for(let i=0;i<100;i++){ctx.fillStyle='#a2d8da';ctx.fillRect((i*127)%W,(i*83)%H,18,2)}mini.hidden=view!=='island';confirmBuild.hidden=cancelBuild.hidden=view!=='island'||!preview;if(view==='world'){drawWorld(worldLayout());return;}ctx.save();ctx.translate(pan.x,pan.y);ctx.scale(zoom,zoom);let a=state.islands[selected],plots=new Map(a.plots.map(b=>[b.x+','+b.y,b]));for(let sum=0;sum<=70;sum++)for(let x=Math.max(0,sum-35);x<=Math.min(35,sum);x++){let y=sum-x,p=tile(x,y),screenX=p.x*zoom+pan.x,screenY=p.y*zoom+pan.y;if(screenX< -100||screenX>W+100||screenY< -100||screenY>H+150)continue;let t=terrain(x,y);if(t==='sea')continue;if(t==='coast'){poly([[p.x,p.y+5],[p.x+35,p.y+22],[p.x,p.y+43],[p.x-35,p.y+22]],'#63c7c9');}let b=plots.get(x+','+y),col=occupied(a,x,y)?.kind==='koyun'?'#a9aa6c':t==='coast'?'#f1d48c':t==='lake'?'#5ac4c8':t==='mountain'?'#7a8471':t==='city'?'#d4bd82':(x+y)%2?'#87b84e':'#8dbd54';poly([[p.x,p.y],[p.x+32,p.y+19],[p.x,p.y+38],[p.x-32,p.y+19]],col);ctx.strokeStyle='#638e3c55';ctx.stroke();if(pick&&pick.x===x&&pick.y===y){ctx.strokeStyle='#ffe1a1';ctx.lineWidth=2;ctx.stroke();ctx.lineWidth=1;}if(b){house(p.x,p.y+19,b.kind);}else if(t==='forest')tree(p.x,p.y+19);else if(t==='mountain'){pixelObject('mountain',p.x,p.y+19)}else if(t==='rock'){pixelObject('rock',p.x,p.y+19)}else if(t==='city')drawCityTile(a,x,y,p);}
+function draw(now){requestAnimationFrame(draw);if(!state||el('game').hidden)return;if(now-lastFrame<33)return;let dt=Math.min(100,now-lastFrame);lastFrame=now;if(state.running)anim+=dt/1000;ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#2f86b5';ctx.fillRect(0,0,W,H);for(let i=0;i<100;i++){ctx.fillStyle='#a2d8da';ctx.fillRect((i*127)%W,(i*83)%H,18,2)}mini.hidden=view!=='island';confirmBuild.hidden=cancelBuild.hidden=view!=='island'||!preview;if(view==='world'){drawWorld(worldLayout());return;}ctx.save();ctx.translate(pan.x,pan.y);ctx.scale(zoom,zoom);let a=state.islands[selected],plots=new Map(a.plots.map(b=>[b.x+','+b.y,b]));drawIslandShallows(a,selected);for(let sum=0;sum<=70;sum++)for(let x=Math.max(0,sum-35);x<=Math.min(35,sum);x++){let y=sum-x,p=tile(x,y),screenX=p.x*zoom+pan.x,screenY=p.y*zoom+pan.y;if(screenX< -100||screenX>W+100||screenY< -100||screenY>H+150)continue;let t=terrain(x,y);if(t==='sea')continue;let b=plots.get(x+','+y),col=occupied(a,x,y)?.kind==='koyun'?'#a9aa6c':t==='coast'?((x+y)%3?'#ebcc86':'#f2d89d'):t==='lake'?'#5ac4c8':t==='mountain'?'#7a8471':t==='city'?'#d4bd82':(x+y)%2?'#87b84e':'#8dbd54';poly([[p.x,p.y],[p.x+32,p.y+19],[p.x,p.y+38],[p.x-32,p.y+19]],col);ctx.strokeStyle='#638e3c55';ctx.stroke();if(pick&&pick.x===x&&pick.y===y){ctx.strokeStyle='#ffe1a1';ctx.lineWidth=2;ctx.stroke();ctx.lineWidth=1;}if(b){house(p.x,p.y+19,b.kind);}else if(t==='forest')tree(p.x,p.y+19);else if(t==='mountain'){pixelObject('mountain',p.x,p.y+19)}else if(t==='rock'){pixelObject('rock',p.x,p.y+19)}else if(t==='city')drawCityTile(a,x,y,p);}
 
 drawRoads(a);drawSelectedDeliveries(a);drawDepot(a);drawDetails(a,now);drawFacilityBadges(a);ctx.restore();drawMini(a);}requestAnimationFrame(draw);
 let pointer,pinch=null;const touches=new Map();canvas.onpointerdown=e=>{touches.set(e.pointerId,{x:e.clientX,y:e.clientY});if(touches.size===2){let [a,b]=[...touches.values()],r=canvas.getBoundingClientRect(),cx=(a.x+b.x)/2-r.left,cy=(a.y+b.y)/2-r.top;pinch={distance:Math.hypot(a.x-b.x,a.y-b.y),zoom,x:(cx-pan.x)/zoom,y:(cy-pan.y)/zoom};pointer=null;canvas.setPointerCapture(e.pointerId);return;}pointer={x:e.clientX,y:e.clientY,px:pan.x,py:pan.y,max:0};canvas.setPointerCapture(e.pointerId)};canvas.onpointermove=e=>{if(touches.has(e.pointerId))touches.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pinch&&touches.size===2&&view==='island'){let [a,b]=[...touches.values()],r=canvas.getBoundingClientRect();zoom=Math.max(.35,Math.min(2.2,pinch.zoom*Math.hypot(a.x-b.x,a.y-b.y)/Math.max(1,pinch.distance)));pan.x=(a.x+b.x)/2-r.left-pinch.x*zoom;pan.y=(a.y+b.y)/2-r.top-pinch.y*zoom;return;}if(pointer)pointer.max=Math.max(pointer.max,Math.hypot(e.clientX-pointer.x,e.clientY-pointer.y));if(!pointer)return;pan.x=pointer.px+e.clientX-pointer.x;pan.y=pointer.py+e.clientY-pointer.y;if(view==='world'){pan.x=Math.max(-W,Math.min(W,pan.x));pan.y=Math.max(-H,Math.min(H,pan.y));}};canvas.onpointerup=e=>{touches.delete(e.pointerId);if(pinch){if(!touches.size)pinch=null;pointer=null;return;}if(!pointer)return;let moved=Math.max(pointer.max||0,Math.hypot(e.clientX-pointer.x,e.clientY-pointer.y));pointer=null;if(moved>8||!state)return;let r=canvas.getBoundingClientRect(),cx=e.clientX-r.left,cy=e.clientY-r.top;if(view==='world'){selectWorldIsland(cx,cy);return;}if(!preview&&!moving){const mapX=(cx-pan.x)/zoom,mapY=(cy-pan.y)/zoom;const badge=hitFacilityBadge(state.islands[selected],mapX,mapY);revealFacilityReason=!!badge;let hit=badge||hitBuilding(mapX,mapY);if(hit){pick={x:hit.x,y:hit.y};openPanel('tile');return;}}let dx=(cx-pan.x)/zoom/32,dy=(cy-pan.y)/zoom/19,x=Math.floor((dx+dy)/2),y=Math.floor((dy-dx)/2);if(x<0||y<0||x>35||y>35){say('Ada üzerinde bir kare seç.');return;}if(preview){preview.x=x;preview.y=y;pick={x,y};return;}pick={x,y};if(x===26&&y===26&&!moving){openPanel('storage');return;}openPanel(moving?'moveConfirm':terrain(x,y)==='city'&&(selected===state.you||state.islands[selected].controller===state.you)?'cityNeeds':'tile')};canvas.onpointercancel=()=>{pointer=null;pinch=null;touches.clear()};
@@ -210,13 +212,28 @@ function liveExtra(){if(!state)return;let a=state.islands[state.you];const set=(
  }
  const upgrade=el('city-upgrade'), next=cityTiers[city.cityLevel+1];
  if(next)for(const [good,amount] of Object.entries(next.cost))updateRequirement('city-cost-'+good,city.stock[good],amount);
+ for(const [good,amount] of Object.entries(a.order.goods))updateRequirement('city-order-'+good,a.stock[good],amount);
+ const deliver=el('deliver-city-order');
+ if(deliver)deliver.disabled=!state.running||!Object.entries(a.order.goods).every(([g,n])=>a.stock[g]>=n);
+ const university=universityTiers[a.universityLevel||0];
+ if(university) set('university-clock','+'+university.points+' AP / dk · Sonraki puan: '+Math.max(0,a.universityNextTick-state.tick)+' sn');
+ const universityNext=universityTiers[(a.universityLevel||0)+1];
+ if(universityNext){
+   for(const [good,amount] of Object.entries(universityNext.cost))updateRequirement('university-cost-'+good,a.stock[good],amount);
+   const build=el('university-upgrade');
+   if(build)build.disabled=!state.running||a.cityLevel<universityNext.cityLevel||
+     !Object.entries(universityNext.cost).every(([g,n])=>a.stock[g]>=n);
+ }
  updateVoyages();
  if(upgrade&&next)upgrade.disabled=!state.running||!Object.entries(next.cost).every(([g,n])=>city.stock[g]>=n);set('order-time','Siparişin kalan süresi: '+a.order.remaining+' sn');for(let [id,sh] of state.ships.entries())set('ship-live-'+id,(sh.status||sh.stage)+' · '+sh.progress+'/30 sn · Yük: '+Object.entries(sh.load).filter(([g,n])=>n).map(([g,n])=>names[g]+' '+n).join(', '));set('trader-live','Altının: '+a.money+' · Tüccarın parası: '+state.trader.money);for(let ai=0;ai<state.islands.length;ai++)for(let g of Object.keys(names)){let target=state.islands[ai];set('market-'+ai+'-'+g,names[g]+': sana satış '+price(target,g,true)+' / senden alış '+price(target,g,false)+' altın · stok '+target.stock[g]);}for(let g of Object.keys(names)){set('quote-'+g,names[g]+': al '+price(state.trader,g,true)+' / sat '+price(state.trader,g,false)+' altın · tüccar stoku '+state.trader.stock[g]);}}
-function extraPanel(){let a=state.islands[selected],mine=state.islands[state.you],b=pick&&occupied(a,pick.x,pick.y),mode=panelMode;if(mode==='tile'&&b?.kind==='liman')mode=(selected===state.you||a.controller===state.you)?'port':'portTrade';if(!['cityNeeds','trade','port','moveConfirm','demolishConfirm','resources','fleet','islandTrade','portTrade'].includes(mode))return false;liveExtra();let sig=JSON.stringify([mode,selected,pick,moving,mine.order.goods,mine.ordersDone,mine.market,state.ships.length,state.contracts.map(c=>[c.id,c.status]),a.horses?.length,a.needs,mode==='port'?state.ships.map(ship=>ship.portOrder?.offerId):null,a.cityLevel,mine.tech,a.listings,mode==='portTrade'?state.ships.map(ship=>ship.portOrder?.offerId):null,mode==='portTrade'?marketSignature(a,mine):null,a.plots.map(b=>[b.x,b.y,b.kind])]);if(sig===extraSignature)return true;extraSignature=sig;let c=el('content');c.innerHTML='';el('heading').textContent={cityNeeds:'Şehir ihtiyaçları',trade:'Ticaret ve takas',port:'Liman ve rotalar',portTrade:a.name+' · Liman ticareti',moveConfirm:'Binayı taşı',demolishConfirm:'Binayı yık',resources:a.name+' · Kaynaklar',fleet:'Taşıma filosu',islandTrade:a.name+' · Ticaret'}[mode];
+function extraPanel(){let a=state.islands[selected],mine=state.islands[state.you],b=pick&&occupied(a,pick.x,pick.y),mode=panelMode;if(mode==='tile'&&b?.kind==='liman')mode=(selected===state.you||a.controller===state.you)?'port':'portTrade';if(!['cityNeeds','trade','port','moveConfirm','demolishConfirm','resources','fleet','islandTrade','portTrade'].includes(mode))return false;liveExtra();let sig=JSON.stringify([mode,selected,pick,moving,mine.order.goods,mine.ordersDone,mine.market,state.ships.length,state.contracts.map(c=>[c.id,c.status]),a.horses?.length,a.needs,mode==='port'?state.ships.map(ship=>ship.portOrder?.offerId):null,a.cityLevel,a.universityLevel,mine.tech,a.listings,mode==='portTrade'?state.ships.map(ship=>ship.portOrder?.offerId):null,mode==='portTrade'?marketSignature(a,mine):null,a.plots.map(b=>[b.x,b.y,b.kind])]);if(sig===extraSignature)return true;extraSignature=sig;let c=el('content');const openDrawers=mode==='cityNeeds'&&c.dataset.cityIsland===String(selected)
+ ? [...c.querySelectorAll('.city-drawer[open]')].map(drawer=>drawer.id):[];
+ c.dataset.cityIsland=mode==='cityNeeds'?String(selected):'';
+ c.innerHTML='';el('heading').textContent={cityNeeds:'Şehir ihtiyaçları',trade:'Ticaret ve takas',port:'Liman ve rotalar',portTrade:a.name+' · Liman ticareti',moveConfirm:'Binayı taşı',demolishConfirm:'Binayı yık',resources:a.name+' · Kaynaklar',fleet:'Taşıma filosu',islandTrade:a.name+' · Ticaret'}[mode];
  if(mode==='portTrade'){portMarket(c,a);return true;}if(mode==='fleet'){fleetPanel(c,a);return true;}if(mode==='islandTrade'){islandTradePanel(c,a);return true;}if(mode==='resources'){if(a.owner&&selected!==state.you&&a.controller!==state.you){if(a.plots.some(b=>b.kind==='liman'))button(c,'Liman ticareti',()=>openSubPanel('portTrade'));button(c,'Ada ihtiyaçları',()=>openSubPanel('islandTrade'));}let p=document.createElement('p');p.innerHTML=costs(Object.fromEntries(['wood','stone','food','wool',a.resource,'coal'].map(g=>[g,''])));c.append(p);if(!a.owner&&selected>=2)button(c,'Koloni kur · 200 altın, 60 odun, 40 taş, 10 alet · 45 sn sefer',()=>send({type:'colonize'}));text(c,'Tarımsal verimlilik: %'+a.fertility+'. Koyun çiftliğinin üretim süresini etkiler.');if(a.ai)text(c,'Yapay zekâ yerleşimi · '+a.plots.length+' bina · Ticaret açık. Dünya ilerledikçe inşa eder ve üretir.');if(selected===state.you||a.controller===state.you)button(c,'Şehir gelişimi',()=>openSubPanel('cityNeeds',()=>{view='island';focus(29,29);}));text(c,'Kıyılar, ormanlar, kayalıklar ve göller her adada farklı konumlarda.');button(c,'Adayı incele',()=>{view='island';focus(17,17);el('panel').hidden=true;panelMode=null});return true;}
  if(mode==='moveConfirm'){if(!moving){openPanel('tile');return true}text(c,labels[moving.kind]+' → '+(pick.x+1)+', '+(pick.y+1));text(c,'Bedel: Ücretsiz');let err='';try{validBuild({...mine,plots:mine.plots.filter(q=>q.x!==moving.x||q.y!==moving.y)},moving.kind,pick.x,pick.y,state.you);if(selected!==state.you)throw Error('Kendi adanı seç')}catch(e){err=e.message}if(err)text(c,err);let mv={...moving};button(c,'Taşımayı onayla',()=>{send({type:'move',fromX:mv.x,fromY:mv.y,x:pick.x,y:pick.y});moving=null;openPanel('tile')}).disabled=!!err||!state.running;button(c,'İptal',()=>{moving=null;openPanel('tile')});return true;}
  if(mode==='demolishConfirm'){if(!b){openPanel('tile');return true}text(c,labels[b.kind]+' kaldırılacak. İlk inşaat malzemesinin yarısı, aşağı yuvarlanarak iade edilir: 5 odun + 2 taş.');button(c,'Yıkımı onayla',()=>{send({type:'demolish',fromX:b.x,fromY:b.y});openPanel('tile')});button(c,'Vazgeç',()=>openPanel('tile'));return true;}
- if(mode==='cityNeeds'){cityPanel(c,a,mine);return true;}
+ if(mode==='cityNeeds'){cityPanel(c,a,mine,openDrawers);return true;}
  if(mode==='port'){voyageCards(c);button(c,'Ticaret · Satış ilanları',()=>openSubPanel('portTrade'));button(c,'Diğer limanlar',()=>el('world').click());if(selected===state.you)button(c,state.mode==='test'?'Gezgin tüccar ve takas':'Takas ve otomatik ticaret',()=>openSubPanel('trade'));buildingActions(c,b);let p=document.createElement('p');p.innerHTML='⛵ Yük gemisi · kapasite 20'+cost(30,10);c.append(p);button(c,'Gemi inşa et',()=>send({type:'ship',x:b.x,y:b.y}));text(c,'Rotalar her yönde en fazla 20 ürün taşır. Tek yön 30 saniye; limanda 4 saniye. Değişiklikler gemi boşken limanda yapılır.');for(let [id,sh] of state.ships.entries()){if(sh.owner!==state.you)continue;let card=document.createElement('section');card.className='tradecard';c.append(card);text(card,'Gemi '+(id+1),'h3');text(card,'').id='ship-live-'+id;if(sh.purchase){text(card,'Satın alma seferinde.');continue;}if(sh.contract){text(card,'Onaylanmış takas siparişini taşıyor.');continue}let destinations=Object.fromEntries(state.islands.map((a,i)=>[i,a.name]).filter(([i])=>i!==state.you&&state.islands[i].owner&&state.islands[i].plots.some(b=>b.kind==='liman')));if(!Object.keys(destinations).length){text(card,'Diğer oyuncunun liman kurması gerekiyor. Test modunda Ticaret menüsündeki gezgin tüccarı kullan.');continue;}let to=field(card,'Hedef liman',sh.to,destinations),good=field(card,'Gidişte satılacak ürün',sh.good,names),amount=field(card,'Gidiş miktarı (0–20)',sh.amount),buy=field(card,'Dönüşte alınacak ürün',sh.buy,names),buyAmount=field(card,'Dönüş miktarı (0–20)',sh.buyAmount),reserve=field(card,'Kendi depomda kalsın',sh.minStock),min=field(card,'En düşük satış fiyatı',sh.minSell),max=field(card,'En yüksek alış fiyatı',sh.maxBuy);button(card,'Rotayı kaydet ve başlat',()=>send({type:'route',id,to:Number(to.value),good:good.value,buy:buy.value,amount:Number(amount.value),buyAmount:Number(buyAmount.value),minStock:Number(reserve.value),minSell:Number(min.value),maxBuy:Number(max.value),enabled:true}));button(card,'Bu seferden sonra dur',()=>send({type:'stopShip',id}));}liveExtra();return true;}
  text(c,'Diğer oyuncunun otomatik alım-satımına izin ver: '+(mine.market?'Açık':'Kapalı'));button(c,mine.market?'Alım-satım iznini kapat':'Alım-satım iznini aç',()=>send({type:'market',enabled:!mine.market}));text(c,'Fiyat stok azaldıkça yükselir. Satın alanın parası ve deposu, satanın stoku kontrol edilir. Sığmayan veya satılamayan yük gemide kalır.');
  if(state.mode==='test'){text(c,'Gezgin tüccar','h3');text(c,'').id='trader-live';let good=field(c,'Tüccar ürünü','copper',names),amount=field(c,'Tüccar miktarı (1–100)',10);button(c,'Satın al',()=>send({type:'trader',good:good.value,amount:Number(amount.value),buy:true}));button(c,'Tüccara sat',()=>send({type:'trader',good:good.value,amount:Number(amount.value),buy:false}));text(c,'Fiyatlar birim başınadır. Tüccarın stoğu her 60 dünya saniyesinde 10 ürün yenilenir.');for(let g of Object.keys(names)){let p=text(c,'');p.className='muted';p.id='quote-'+g;}}
@@ -314,6 +331,14 @@ function sprite(kind,frame=0){let key=kind+':'+frame;if(pixelCache.has(key))retu
 if(kind==='tree'){r(29,37,5,15,ink);r(30,37,3,14,wood);for(let [y,w] of [[9,7],[17,12],[26,17]]){for(let k=0;k<11;k++){let width=Math.min(w,k*2+2);r(32-width,y+k,width*2,1,k<5?'#368b3c':'#26713b')}}}
 else if(kind==='rock'||kind==='mountain'){let m=kind==='mountain';shape(m?[[5,49],[9,35],[19,32],[21,18],[32,9],[43,21],[48,35],[57,49]]:[[14,49],[15,39],[25,30],[43,32],[50,49]],ink);shape(m?[[8,47],[12,36],[23,34],[25,20],[32,13],[42,24],[45,37],[53,47]]:[[17,47],[18,40],[27,33],[41,35],[46,47]],stone);shape(m?[[32,13],[42,24],[45,37],[53,47],[32,46]]:[[32,34],[41,35],[46,47],[32,47]],'#7d817c');r(m?24:23,m?32:38,7,3,'#bec0b4');}
 else if(kind==='sheep'){r(19,43,3,5,ink);r(32,43,3,5,ink);r(16,33,20,11,'#e4dabe');r(19,30,14,15,'#fff2d7');r(34,34,7,8,'#fff2d7');r(38,36,2,2,ink);r(35,31,3,4,'#a47b4c');}
+else if(kind==='city-university'){
+  shape([[8,29],[31,16],[57,29],[57,48],[32,59],[8,47]],'#e5d4b0');
+  shape([[32,34],[57,29],[57,48],[32,59]],'#b7a184');
+  shape([[6,30],[31,11],[59,30],[32,43]],'#547982');
+  shape([[13,30],[31,18],[50,30],[32,38]],'#7c9fa2');
+  for(let c=0;c<3;c++)r(13+c*7,38+c*4,4,10,'#fff1cf');
+  r(37,39,7,11,'#41494d');r(49,35,4,7,'#766044');
+}
 else if(kind==='city-park'){
   shape([[5,47],[31,34],[59,47],[32,61]],'#668c42');
   shape([[9,47],[32,37],[55,47],[32,57]],'#a4b75d');
@@ -398,7 +423,7 @@ function technologyPanel(logisticsOnly=false){
   const visible=entries.filter(([,tech])=>branches.includes(tech.branch));
   if(!visible.some(([id])=>id===selectedTechnology))selectedTechnology=visible[0][0];
   const tech=treeData[selectedTechnology];
-  const sig=JSON.stringify([logisticsOnly,selectedTechnology,island.tech,island.research,island.rp,state.running,
+  const sig=JSON.stringify([logisticsOnly,selectedTechnology,island.tech,island.research,island.rp,island.universityLevel,state.running,
     Object.keys(tech.cost).map(g=>island.stock[g])]);
   if(sig===techSignature)return;
   techSignature=sig;
@@ -452,7 +477,11 @@ function technologyPanel(logisticsOnly=false){
       else{selectedTechnology=key;technologyPanel(logisticsOnly);}
     }).dataset.prerequisite=key;
   }
-  if(prerequisites.childElementCount){text(detail,'Ön koşullar','h4');detail.append(prerequisites);}
+  if(prerequisites.childElementCount||tech.university){
+    text(detail,'Ön koşullar','h4');
+    detail.append(prerequisites);
+  }
+  if(tech.university)text(detail,'').id='university-requirement';
   for(const [g,n] of Object.entries(tech.cost))stockRequirement(detail,g,n,'research-'+g);
   text(detail,'').id='research-points';
   const start=button(detail,'Araştır',()=>send({type:'research',id:selectedTechnology}));
@@ -467,7 +496,8 @@ function updateTechnologyDetails(detail,island,id,tech){
     const key=control.dataset.tech;
     const done=island.tech.includes(key);
     const active=island.research?.id===key;
-    const unlocked=treeData[key].requires.every(req=>island.tech.includes(req));
+    const unlocked=treeData[key].requires.every(req=>island.tech.includes(req))&&
+      (island.universityLevel||0)>=(treeData[key].university||0);
     control.setAttribute('aria-pressed',String(key===id));
     control.querySelector('.node-state').textContent=done?'✓ Tamamlandı':active?'◷ Araştırılıyor':unlocked?'Açık':'▣ Kilitli';
   }
@@ -477,10 +507,15 @@ function updateTechnologyDetails(detail,island,id,tech){
   }
   for(const [g,n] of Object.entries(tech.cost))updateRequirement('research-'+g,island.stock[g],n);
   el('research-points').textContent=island.rp+' / '+tech.rp+' araştırma puanı · '+tech.time+' sn';
+  if(tech.university){
+    const level=island.universityLevel||0;
+    el('university-requirement').textContent=(level>=tech.university?'✓ ':'○ ')+
+      'Üniversite seviyesi '+level+' / '+tech.university;
+  }
   const start=el('start-research');
   const done=island.tech.includes(id);
   start.textContent=done?'✓ Tamamlandı':island.research?.id===id?'Araştırılıyor · '+island.research.remaining+' sn':'Araştır';
-  start.disabled=!state.running||!!island.research||done||island.rp<tech.rp||
+  start.disabled=!state.running||!!island.research||done||island.rp<tech.rp||(island.universityLevel||0)<(tech.university||0)||
     !tech.requires.every(key=>island.tech.includes(key))||
     !Object.entries(tech.cost).every(([g,n])=>island.stock[g]>=n);
 }
@@ -489,6 +524,10 @@ setInterval(fleetLive,1000);
 
 function drawCityTile(island,x,y,point){
   const level=island.cityLevel||0;
+  if(island.universityLevel&&x===30&&y===30){
+    pixelObject('city-university',point.x,point.y+21,0,.8+.06*island.universityLevel);
+    return;
+  }
   const landmark=cityLandmarks.find(item=>item.x===x&&item.y===y&&level>=item.level);
   if(landmark){
     pixelObject(landmark.kind,point.x,point.y+21,0,.82);
@@ -512,7 +551,7 @@ function cityHouse(island,x,y){
   return island.cityLevel>=3 && y===28;
 }
 
-function cityPanel(container,island,home){
+function cityPanel(container,island,home,openDrawers){
   const tier=cityTier(island);
   const next=cityTiers[island.cityLevel+1];
   const tiers=document.createElement('div');
@@ -532,36 +571,59 @@ function cityPanel(container,island,home){
   container.append(tiers);
   text(container,'Son tüketim · 30 saniyelik ihtiyaç','h3');
   for(const [g,n] of Object.entries(tier.demand))stockRequirement(container,g,n,'city-supply-'+g);
-  if(next){
-    text(container,next.name+' · +'+(next.population-tier.population)+' nüfus','h3');
-    for(const [g,n] of Object.entries(next.cost))stockRequirement(container,g,n,'city-cost-'+g);
-    const details=document.createElement('details');
-    details.className='visual-details';
-    text(details,'Sonraki kademenin dakikalık ihtiyacı','summary');
-    for(const [g,n] of Object.entries(next.demand))details.append(productChip(g,n*2+' '+names[g]));
-    container.append(details);
-  }else text(container,'En yüksek şehir kademesine ulaştın.');
   if(island===home){
-    const orderDetails=document.createElement('details');
-    orderDetails.className='visual-details';
-    text(orderDetails,'Şehir siparişi','summary');
-    container.append(orderDetails);
-    const order=document.createElement('p');
-    order.innerHTML=costs(home.order.goods);
-    orderDetails.append(order);
-    rewardCards(orderDetails,home.order.reward,10);
-    text(orderDetails,'').id='order-time';
-    button(orderDetails,'Siparişi teslim et',()=>send({type:'deliverOrder'}));
+    const orders=cityDrawer(container,'city-orders','Şehir siparişleri · Altın ve araştırma puanı',openDrawers);
+    text(orders,'Depodaki miktar / Siparişin istediği','p').className='muted';
+    for(const [good,amount] of Object.entries(home.order.goods))
+      stockRequirement(orders,good,amount,'city-order-'+good);
+    rewardCards(orders,home.order.reward,10);
+    text(orders,'').id='order-time';
+    const deliver=button(orders,'Siparişi teslim et',()=>send({type:'deliverOrder'}));
+    deliver.id='deliver-city-order';
+    deliver.className='primary-action';
   }
+  const development=cityDrawer(container,'city-development','Şehri geliştir',openDrawers);
+  if(island===home)universitySection(development,home);
   if(next){
+    text(development,next.name+' · +'+(next.population-tier.population)+' nüfus','h3');
+    text(development,'Depodaki miktar / Gereken','p').className='muted';
+    for(const [good,amount] of Object.entries(next.cost))stockRequirement(development,good,amount,'city-cost-'+good);
+    text(development,'Sonraki kademenin dakikalık ihtiyacı','h4');
+    for(const [good,amount] of Object.entries(next.demand))development.append(productChip(good,amount*2+' '+names[good]));
     const action=document.createElement('div');
     action.className='panel-action';
     const upgrade=button(action,'Malzemeleri teslim et ve şehri geliştir',()=>send({type:'cityUpgrade',island:selected,level:island.cityLevel+1}));
     upgrade.id='city-upgrade';
     upgrade.className='primary-action';
-    container.append(action);
-  }
+    development.append(action);
+  }else text(development,'En yüksek şehir kademesine ulaştın.');
   liveExtra();
+}
+
+function cityDrawer(parent,id,label,openDrawers){
+  const drawer=document.createElement('details');
+  drawer.className='visual-details city-drawer';
+  drawer.id=id;
+  drawer.open=openDrawers.includes(id);
+  text(drawer,label,'summary');
+  parent.append(drawer);
+  return drawer;
+}
+
+function universitySection(parent,island){
+  const section=document.createElement('section');
+  const level=island.universityLevel||0;
+  text(section,level?'Üniversite · Seviye '+level:'Üniversite','h3');
+  if(level)text(section,'').id='university-clock';
+  const next=universityTiers[level+1];
+  if(next){
+    text(section,cityTiers[next.cityLevel].name+' kademesi · Seviye '+(level+1)+' · +'+next.points+' AP / dk');
+    for(const [good,amount] of Object.entries(next.cost))stockRequirement(section,good,amount,'university-cost-'+good);
+    const upgrade=button(section,level?'Üniversiteyi geliştir':'Üniversite kur',
+      ()=>send({type:'universityUpgrade',island:selected,level:level+1}));
+    upgrade.id='university-upgrade';
+  }
+  parent.append(section,document.createElement('hr'));
 }
 
 function canBuyListing(offer,seller,buyer){
@@ -924,13 +986,8 @@ function drawWorld(layout){
   ctx.scale(layout.sx,layout.sy);
   state.islands.forEach((island,index)=>{
     const [x,y]=islandCenters[index];
-    for(let tx=0;tx<36;tx++)for(let ty=0;ty<36;ty++){
-      const terrain=terrainAt(tx,ty,index,island);
-      if(terrain==='sea')continue;
-      ctx.fillStyle={coast:'#ecd08a',lake:'#5ac4c8',mountain:'#87927f'}[terrain]||'#89b653';
-      ctx.fillRect(x+(tx-ty)*2,y+(tx+ty-36)*1.15,4,3);
-    }
-    tree(x,y);
+    ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(silhouetteFor(island,index),x-96,y-81);
     const name=island.name+' · '+(island.owner||'Boş');
     ctx.font='600 16px system-ui';
     ctx.textAlign='center';
@@ -1069,4 +1126,109 @@ function levelPanel(){
   ])text(activities,label+' · +'+progressionXP[activity]+' XP','li');
   content.append(activities);
 }
+const mapTerrainCache=new Map();
+const worldSilhouettes=new Map();
+const landProfiles=[
+  {trees:5,rocks:3,width:1.04,height:.92},
+  {trees:14,rocks:2,width:.89,height:1.13},
+  {trees:3,rocks:9,width:1.13,height:.93},
+  {trees:13,rocks:3,width:1.05,height:1.02},
+  {trees:8,rocks:4,width:.91,height:1.12},
+  {trees:10,rocks:2,width:1.16,height:.88},
+  {trees:3,rocks:10,width:.96,height:1.13},
+  {trees:12,rocks:4,width:1.1,height:.91},
+  {trees:7,rocks:6,width:1.13,height:.89},
+  {trees:9,rocks:6,width:.92,height:1.1}
+];
+
+function islandTerrainLayer(island,index){
+  const key=JSON.stringify(island.terrainOverrides||{});
+  const cached=mapTerrainCache.get(index);
+  if(cached?.key===key)return cached;
+  const terrain=new Map();
+  const shores=[];
+  const at=(x,y)=>terrain.get(x+','+y)||'sea';
+  for(let x=0;x<36;x++)for(let y=0;y<36;y++)terrain.set(x+','+y,terrainAt(x,y,index,island));
+  for(let x=-2;x<=37;x++)for(let y=-2;y<=37;y++){
+    if(at(x,y)!=='sea')continue;
+    let distance=3;
+    for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++){
+      const steps=Math.abs(dx)+Math.abs(dy);
+      if(steps<distance&&at(x+dx,y+dy)!=='sea')distance=steps;
+    }
+    if(distance<3)shores.push({x,y,distance});
+  }
+  const next={key,at,shores};
+  mapTerrainCache.set(index,next);
+  return next;
+}
+
+function drawIslandShallows(island,index){
+  const {shores}=islandTerrainLayer(island,index);
+  for(const {x,y,distance} of shores){
+    const p=tile(x,y),sx=p.x*zoom+pan.x,sy=p.y*zoom+pan.y;
+    if(sx< -75||sx>W+75||sy< -50||sy>H+50)continue;
+    poly([[p.x,p.y],[p.x+32,p.y+19],[p.x,p.y+38],[p.x-32,p.y+19]],distance===1?'#60bac2':'#419aaF');
+    if(distance===1&&((x+2*y+index)%5===0)){
+      const drift=Math.sin(anim*1.6+x+y)*3;
+      ctx.fillStyle='#a4dcce';
+      ctx.fillRect(Math.round(p.x-7+drift),p.y+18,12,2);
+      ctx.fillRect(Math.round(p.x+5+drift),p.y+20,5,1);
+    }
+  }
+}
+
+function silhouetteFor(island,index){
+  const layer=islandTerrainLayer(island,index);
+  const tier=island.cityLevel||0;
+  const hasPort=island.plots.some(b=>b.kind==='liman');
+  const hasIndustry=island.plots.length>=7;
+  const key=JSON.stringify([layer.key,tier,hasPort,hasIndustry,island.universityLevel]);
+  const cached=worldSilhouettes.get(index);
+  if(cached?.key===key)return cached.image;
+  const image=document.createElement('canvas');
+  image.width=192;image.height=144;
+  const g=image.getContext('2d');
+  g.imageSmoothingEnabled=false;
+  const profile=landProfiles[index];
+  const pos=(x,y)=>[Math.round(96+(x-y)*2*profile.width),Math.round(81+(x+y-36)*1.12*profile.height)];
+  const cell=(x,y,color)=>{
+    const [px,py]=pos(x,y);
+    g.fillStyle=color;
+    g.fillRect(px-2,py,Math.ceil(4*profile.width)+1,3);
+  };
+  for(const depth of [2,1]){
+    for(const shore of layer.shores)if(shore.distance===depth)
+      cell(shore.x,shore.y,depth===2?'#419bb1':'#64bdc1');
+  }
+  const forest=[],rock=[];
+  for(let depth=0;depth<=70;depth++)for(let x=Math.max(0,depth-35);x<=Math.min(35,depth);x++){
+    const y=depth-x,type=layer.at(x,y);
+    if(type==='sea')continue;
+    const color={coast:'#eed093',lake:'#58afb9',mountain:'#858777',rock:'#929680',forest:'#547f43',city:'#ccad79'}[type];
+    cell(x,y,color||(profile.trees>9?'#87a956':'#a6b571'));
+    if(type==='forest')forest.push([x,y]);
+    if(type==='mountain'||type==='rock')rock.push([x,y]);
+  }
+  const decorations=[];
+  for(const [positions,count,kind] of [[forest,profile.trees,'tree'],[rock,profile.rocks,'mountain']]){
+    for(let n=0;n<count&&positions.length;n++){
+      const [x,y]=positions[Math.floor((n+.5)*positions.length/count)];
+      decorations.push({x,y,kind,size:kind==='tree'?16:(profile.rocks>7?30:19)});
+    }
+  }
+  if(hasPort)decorations.push({x:31,y:28,kind:'liman',size:27});
+  if(hasIndustry||tier){
+    for(let n=0;n<2+tier;n++)decorations.push({x:27+n,y:27+n%2,kind:'city',size:19+n%2*3});
+  }
+  if(island.universityLevel)decorations.push({x:32,y:29,kind:'city-university',size:28});
+  decorations.sort((a,b)=>a.x+a.y-b.x-b.y);
+  for(const {x,y,kind,size} of decorations){
+    const [px,py]=pos(x,y);
+    g.drawImage(sprite(kind),px-size/2,py-size*.78,size,size);
+  }
+  worldSilhouettes.set(index,{key,image});
+  return image;
+}
+
 </script></html>
