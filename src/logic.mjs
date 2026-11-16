@@ -24,7 +24,7 @@ function unload(a,sh,g,n=Infinity){let q=Math.max(0,Math.min(n,sh.load[g]||0,cap
 function load(a,sh,g,n){let q=Math.max(0,Math.min(n,a.stock[g],(sh.capacity||20)-loadCount(sh)));a.stock[g]-=q;sh.load[g]+=q;return q}
 function actBase(s,p,m){let a=s.islands[p.island];
  if(m.type==='build'){let r=recipes[m.kind];if(!r)throw Error('Bilinmeyen bina');if(r.tech&&!a.tech.includes(r.tech))throw Error('Önce teknolojiyi araştır');if(['demir','bakir'].includes(m.kind)&&r.out!==a.resource)throw Error('Bu adada bu maden yok');validBuild(a,m.kind,m.x,m.y,p.island);pay(a,{wood:10,stone:5});let b={kind:m.kind,x:m.x,y:m.y,size:m.kind==='koyun'?2:1,phase:0,fertility:a.fertility};b.path=workPath(b,p.island,a);a.plots.push(b);return;}
- if(m.type==='move'||m.type==='demolish'){let b=a.plots.find(b=>b.x===m.fromX&&b.y===m.fromY);if(!b)throw Error('Bina bulunamadı');if(b.kind==='liman'&&a.plots.filter(b=>b.kind==='liman').length===1&&s.ships.some(sh=>sh.from===p.island||sh.to===p.island))throw Error('Filo bu limanı kullanıyor. Önce ikinci bir liman kur');if(m.type==='move'){let other={...a,plots:a.plots.filter(q=>q!==b)};validBuild(other,b.kind,m.x,m.y,p.island);b.x=m.x;b.y=m.y;b.path=workPath(b,p.island,a);b.phase=0;}else{if(a.stock.wood+5>capacity(a)||a.stock.stone+2>capacity(a))throw Error('İade için depoda 5 odun ve 2 taş yeri aç');a.stock.wood+=5;a.stock.stone+=2;a.plots=a.plots.filter(q=>q!==b);}return;}
+ if(m.type==='move'||m.type==='demolish'){let b=a.plots.find(b=>b.x===m.fromX&&b.y===m.fromY);if(!b)throw Error('Bina bulunamadı');if(b.kind==='liman'&&a.plots.filter(b=>b.kind==='liman').length===1&&(s.ships.some(sh=>sh.from===p.island||sh.to===p.island||sh.barterRoute===p.island)||s.contracts.some(c=>c.status==='queued'&&(c.from===p.island||c.to===p.island))))throw Error('Filo veya bekleyen takas bu limanı kullanıyor. Önce ikinci bir liman kur');if(m.type==='move'){let other={...a,plots:a.plots.filter(q=>q!==b)};validBuild(other,b.kind,m.x,m.y,p.island);b.x=m.x;b.y=m.y;b.path=workPath(b,p.island,a);b.phase=0;}else{if(a.stock.wood+5>capacity(a)||a.stock.stone+2>capacity(a))throw Error('İade için depoda 5 odun ve 2 taş yeri aç');a.stock.wood+=5;a.stock.stone+=2;a.plots=a.plots.filter(q=>q!==b);}return;}
  if(m.type==='storageUpgrade'){if(a.storageLevel>=10)throw Error('En yüksek depo seviyesi');pay(a,upgradeCost(a.storageLevel));a.storageLevel++;return;}
  if(m.type==='productionUpgrade'){if(a.productionLevel>=5)throw Error('En yüksek üretim seviyesi');pay(a,upgradeCost(a.productionLevel+1));a.productionLevel++;return;}
  if(m.type==='research'){let t=technologies[m.id];if(!t||a.research||a.rp<(t.rp||0)||a.tech.includes(m.id)||!t.requires.every(k=>a.tech.includes(k)))throw Error('Araştırma koşulları karşılanmıyor');pay(a,t.cost);a.research={id:m.id,remaining:t.time||90};a.rp-=t.rp||0;return;}
@@ -35,10 +35,74 @@ function actBase(s,p,m){let a=s.islands[p.island];
  if(m.type==='route'){let sh=s.ships[m.id];if(!sh||sh.owner!==p.island||sh.contract)throw Error('Gemi bulunamadı veya takasa ayrıldı');if(sh.stage!=='home'||loadCount(sh))throw Error('Gemi boş olarak limana dönünce rota değiştirilebilir');if(!goods.includes(m.good)||!goods.includes(m.buy)||!s.islands[m.to]||m.to===p.island||!port(s.islands[m.to])||!s.islands[m.to].owner)throw Error('Ürünleri ve yerleşik hedef limanı seç');for(let k of ['amount','buyAmount','minStock','minSell','maxBuy'])integer(m[k],k==='amount'||k==='buyAmount'?20:9999);Object.assign(sh,...['to','good','buy','amount','buyAmount','minStock','minSell','maxBuy'].map(k=>({[k]:m[k]})),{enabled:!!m.enabled});return;}
  if(m.type==='stopShip'){let sh=s.ships[m.id];if(!sh||sh.owner!==p.island)throw Error('Gemi bulunamadı');sh.enabled=false;return;}
  if(m.type==='offer'){let q=s.players.find(q=>q.island===m.to);if(!q||m.to===p.island||!goods.includes(m.give)||!goods.includes(m.receive)||m.give===m.receive)throw Error('Geçersiz takas');integer(m.giveN,20);integer(m.receiveN,20);if(!m.giveN||!m.receiveN)throw Error('Miktar en az 1');if(s.contracts.filter(c=>c.status==='pending').length>=10)throw Error('Bekleyen teklifleri sonuçlandır');s.contracts.push({id:s.nextId++,from:p.island,to:m.to,give:m.give,receive:m.receive,giveN:m.giveN,receiveN:m.receiveN,status:'pending'});return;}
- if(m.type==='reply'){let c=s.contracts.find(c=>c.id===m.id&&c.to===p.island&&c.status==='pending');if(!c)throw Error('Teklif bulunamadı');if(!m.accept){c.status='rejected';return;}let src=s.islands[c.from],sh=s.ships.find(sh=>sh.owner===c.from&&!sh.contract&&!sh.enabled&&sh.stage==='home'&&!loadCount(sh));if(!sh||!port(a)||!port(src))throw Error('İki liman ve teklif sahibinin boş, durdurulmuş gemisi gerekli');if(a.stock[c.receive]<c.receiveN||src.stock[c.give]<c.giveN)throw Error('Takas ürünleri yetersiz');a.stock[c.receive]-=c.receiveN;c.escrow=c.receiveN;src.stock[c.give]-=c.giveN;sh.load[c.give]=c.giveN;sh.contract=c.id;sh.to=c.to;sh.stage='out';sh.progress=0;sh.enabled=false;c.status='shipping';return;}
+ if(m.type==='reply'){replyToBarter(s,p,m);return;}
  throw Error('Bilinmeyen işlem');}
+function replyToBarter(world,player,message){
+  const contract=world.contracts.find(c=>c.id===message.id&&c.to===player.island&&c.status==='pending');
+  if(!contract)throw Error('Teklif bulunamadı');
+  if(message.accept!==true){
+    contract.status='rejected';
+    return;
+  }
+  const sender=world.islands[contract.from];
+  const receiver=world.islands[contract.to];
+  if(!port(sender)||!port(receiver))throw Error('Takas için iki adada da liman gerekli');
+  if(sender.stock[contract.give]<contract.giveN||receiver.stock[contract.receive]<contract.receiveN)
+    throw Error('Takas için depodaki ürünler yetersiz');
+  sender.stock[contract.give]-=contract.giveN;
+  receiver.stock[contract.receive]-=contract.receiveN;
+  contract.escrow=contract.receiveN;
+  contract.status='queued';
+  contract.queueOrder=world.nextId++;
+  syncLocations(sender);
+  syncLocations(receiver);
+
+  const ships=world.ships.filter(ship=>ship.owner===contract.from && ship.stage==='home' && !loadCount(ship));
+  ships.sort((a,b)=>Number(a.enabled)-Number(b.enabled));
+  ships.some(ship=>dispatchBarter(world,ship));
+}
+
+function dispatchBarter(world,ship){
+  const queued=world.contracts.filter(c=>c.from===ship.owner&&c.status==='queued');
+  queued.sort((a,b)=>(a.queueOrder??a.id)-(b.queueOrder??b.id));
+  const contract=queued[0];
+  if(!contract || ship.contract || ship.purchase || ship.mission || ship.expedition ||
+    Math.max(contract.giveN,contract.receiveN)>(ship.capacity||20))return false;
+  ship.barterRoute=ship.to;
+  ship.load[contract.give]=contract.giveN;
+  ship.contract=contract.id;
+  ship.to=contract.to;
+  ship.stage='out';
+  ship.progress=0;
+  ship.back=false;
+  ship.cargo=contract.giveN;
+  ship.status='Takas için yola çıktı';
+  contract.status='shipping';
+  return true;
+}
+
 export function shipTick(s,sh){let a=s.islands[sh.from],b=s.islands[sh.to];if(!a||!b)return;let c=s.contracts.find(c=>c.id===sh.contract);sh.back=sh.stage==='return';sh.cargo=loadCount(sh);
- if(sh.stage==='home'){for(let g of goods)unload(a,sh,g);if(loadCount(sh)){sh.status='Depo dolu · yük gemide bekliyor';return;}if(c){c.status='done';delete sh.contract;}if(sh.portOrder)sh.portOrder.delivered=true;if(!sh.enabled){sh.status='Limanda';return;}if(!port(a)||!port(b)||(!b.market&&(!Number.isInteger(a.controller)||b.controller!==a.controller))){sh.status='Hedef liman / ticaret izni bekleniyor';return;}load(a,sh,sh.good,Math.min(sh.amount,Math.max(0,a.stock[sh.good]-sh.minStock)));sh.stage='out';sh.progress=0;sh.status='Yola çıktı';return;}
+ if(sh.stage==='home'){
+   for(const good of goods)unload(a,sh,good);
+   if(loadCount(sh)){sh.status='Depo dolu · yük gemide bekliyor';return;}
+   if(c){
+     c.status='done';
+     delete sh.contract;
+     if(Number.isInteger(sh.barterRoute))sh.to=sh.barterRoute;
+     delete sh.barterRoute;
+   }
+   if(sh.portOrder)sh.portOrder.delivered=true;
+   if(dispatchBarter(s,sh))return;
+   if(!sh.enabled){sh.status='Limanda';return;}
+   const destination=s.islands[sh.to];
+   if(!port(a)||!port(destination)||(!destination.market&&(!Number.isInteger(a.controller)||destination.controller!==a.controller))){
+     sh.status='Hedef liman / ticaret izni bekleniyor';
+     return;
+   }
+   load(a,sh,sh.good,Math.min(sh.amount,Math.max(0,a.stock[sh.good]-sh.minStock)));
+   sh.stage='out';sh.progress=0;sh.status='Yola çıktı';
+   return;
+ }
  if(sh.stage==='out'||sh.stage==='return'){sh.status=sh.stage==='out'?'Gidiş':'Dönüş';if(++sh.progress>=(a.tech.includes('logistics')?20:30)){sh.stage=sh.stage==='out'?'dock':'home';sh.progress=0;}return;}
  if(sh.stage==='dock'&&sh.purchase){
    const purchase=sh.purchase;

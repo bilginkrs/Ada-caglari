@@ -13,3 +13,51 @@ test('Two-way trading conserves money and goods, respecting capacity',()=>{let s
 test('Trade consent and price limits prevent unwanted transactions',()=>{let s=setup(),sh=ship(s),a=s.islands[0],b=s.islands[1];sh.enabled=true;shipTick(s,sh);assert.equal(sh.stage,'home');b.market=true;sh.stage='dock';sh.progress=3;sh.load.wood=10;sh.minSell=999;sh.maxBuy=0;let cash=a.money;shipTick(s,sh);assert.equal(sh.load.wood,10);assert.equal(a.money,cash);});
 test('Accepted barter reserves both goods and waits for warehouse space',()=>{let s=setup(),sh=ship(s),a=s.islands[0],b=s.islands[1];a.stock.wood=50;b.stock.copper=20;act(s,s.players[0],{type:'offer',to:1,give:'wood',giveN:10,receive:'copper',receiveN:8});let id=s.contracts[0].id;act(s,s.players[1],{type:'reply',id,accept:true});assert.equal(b.stock.copper,12);assert.equal(a.stock.wood,40);b.stock.wood=500;sh.stage='dock';sh.progress=3;shipTick(s,sh);assert.equal(sh.stage,'dock');assert.equal(sh.load.wood,10);assert.equal(s.contracts[0].escrow,8);b.stock.wood=490;sh.progress=3;shipTick(s,sh);assert.equal(b.stock.wood,500);assert.equal(sh.load.copper,8);sh.stage='home';shipTick(s,sh);assert.equal(a.stock.copper,8);assert.equal(s.contracts[0].status,'done');});
 test('Move validates area and is free, demolition refunds without spilling',()=>{let s=setup(),a=s.islands[0],spots=[];for(let y=1;y<34;y++)for(let x=1;x<34;x++)try{validBuild(a,'oduncu',x,y,0);spots.push({x,y})}catch{}let [u,v]=spots;act(s,s.players[0],{type:'build',kind:'oduncu',...u});let before=a.stock.wood;act(s,s.players[0],{type:'move',fromX:u.x,fromY:u.y,...v});assert.equal(a.stock.wood,before);assert.deepEqual([a.plots[0].x,a.plots[0].y],[v.x,v.y]);a.stock.wood=500;assert.throws(()=>act(s,s.players[0],{type:'demolish',fromX:v.x,fromY:v.y}));assert.equal(a.plots.length,1);a.stock.wood=100;act(s,s.players[0],{type:'demolish',fromX:v.x,fromY:v.y});assert.equal(a.stock.wood,105);assert.equal(a.plots.length,0);});
+
+test('Barter can be accepted without a ship and resumes from the saved queue',()=>{
+  let world=setup();
+  const [sender,receiver]=world.players;
+  const [origin,destination]=world.islands;
+  port(origin);
+  port(destination);
+  destination.stock.copper=15;
+  act(world,sender,{type:'offer',to:1,give:'wood',giveN:10,receive:'copper',receiveN:5});
+  const contract=world.contracts[0];
+  act(world,receiver,{type:'reply',id:contract.id,accept:true});
+  assert.equal(contract.status,'queued');
+  assert.equal(origin.stock.wood,50);
+  assert.equal(destination.stock.copper,10);
+  assert.throws(()=>act(world,receiver,{type:'reply',id:contract.id,accept:true}));
+  assert.throws(()=>act(world,sender,{type:'demolish',fromX:0,fromY:17}),/bekleyen takas/);
+  world=migrate(structuredClone(world));
+  act(world,sender,{type:'ship',x:0,y:17});
+  tick(world);
+  assert.equal(world.ships[0].load.wood,10);
+  assert.equal(world.contracts[0].status,'shipping');
+  assert.equal(world.islands[0].stock.wood,20);
+});
+
+test('A busy ship serves accepted barters in acceptance order and then resumes its route',()=>{
+  const world=setup(),boat=ship(world);
+  const [sender,receiver]=world.players;
+  world.islands[1].stock.copper=30;
+  const offer={type:'offer',to:1,give:'wood',giveN:10,receive:'copper',receiveN:5};
+  act(world,sender,offer);
+  act(world,sender,offer);
+  const [first,second]=world.contracts;
+  Object.assign(boat,{to:2,enabled:true,stage:'return',progress:29});
+  act(world,receiver,{type:'reply',id:second.id,accept:true});
+  act(world,receiver,{type:'reply',id:first.id,accept:true});
+  assert.equal(first.status,'queued');
+  assert.equal(second.status,'queued');
+  for(let i=0;i<2;i++)shipTick(world,boat);
+  assert.equal(boat.contract,second.id);
+  for(let i=0;i<65;i++)shipTick(world,boat);
+  assert.equal(second.status,'done');
+  assert.equal(boat.contract,first.id);
+  for(let i=0;i<65;i++)shipTick(world,boat);
+  assert.equal(first.status,'done');
+  assert.equal(boat.to,2);
+  assert.equal(boat.enabled,true);
+  assert.equal(world.islands[0].stock.copper,10);
+});

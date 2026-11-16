@@ -73,11 +73,35 @@
   #active-research{font-size:.82rem}
   #toast{top:165px}
 }
-</style><header><div><small>TAKIMADALAR · 1.5</small><h1>Ada Çağları</h1></div><div id="status">Birlikte bir dünya kurun.</div></header>
+#research-points-bar{display:inline-flex;flex:0 0 auto;align-self:center;white-space:nowrap;padding:5px 9px;border-radius:5px;background:#eee0f1;color:#543747;font-weight:700}
+#panel.tech{display:flex;flex-direction:column;overflow:hidden}
+#panel.tech .panel-heading{flex:none;display:flow-root}
+#panel.tech #content{display:flex;align-items:stretch;flex:1 1 auto;min-height:0;overflow:hidden}
+#panel.tech .technology-graph,#panel.tech .technology-details{overflow:auto;overscroll-behavior:contain;min-height:0;scrollbar-gutter:stable}
+#panel.tech .technology-details{position:static;margin:0}
+#trade-notice{position:absolute;top:120px;right:12px;z-index:7;width:min(344px,calc(100% - 24px));pointer-events:none}
+#trade-notice-toggle,#trade-notice-list{pointer-events:auto}
+#trade-notice-toggle{float:right;min-height:44px}
+#trade-notice-list{clear:both;max-height:45vh;overflow:auto;overscroll-behavior:contain;border:2px solid #84643c;border-radius:7px;background:#fff0cb;padding:10px 13px;box-shadow:0 8px 20px #231b1b35}
+#trade-notice-list h3{margin:4px 0 10px}
+.trade-notice-offer+.trade-notice-offer{margin-top:12px;border-top:1px solid #b89a62;padding-top:12px}
+.trade-notice-actions{display:flex;gap:8px;flex-wrap:wrap}
+.trade-notice-actions button{flex:1;min-height:44px}
+.trade-notice-actions .primary-action{background:#416746;color:#fff4d5;border-color:#315237;box-shadow:none;font-weight:700}
+@media(max-width:850px){
+  #panel.tech #content{flex-direction:column}
+  #panel.tech .technology-graph,#panel.tech .technology-details{flex:1 1 50%}
+  #panel.tech .technology-details{margin-top:4px}
+}
+@media(max-width:680px){
+  #research-points-bar{font-size:.8rem;padding:4px}
+  #trade-notice{top:162px}
+}
+</style><header><div><small>ARAŞTIRMA VE TAKAS · 1.6</small><h1>Ada Çağları</h1></div><div id="status">Birlikte bir dünya kurun.</div></header>
 <section id="lobby"><h2>İki kıyı, ortak bir hikâye.</h2><p>Ortak dünyada ikiniz de bağlıyken zaman ilerler. Test dünyasında tek başına oynayabilirsin.</p><input id="name" placeholder="Oyuncu adı" maxlength="24"><input id="room" placeholder="Ortak oda kodu"><button id="join">Birlikte oyna</button> <button id="invite">Davet bağlantısını kopyala</button><p><button id="solo">Tek başına test et</button></p><small>Test ilerlemesi ayrı kaydedilir.</small><p id="hint"></p></section>
-<main id="game" hidden><nav id="toolbar"><button id="menu">Menü</button><button id="world">Adalar</button><button id="home">Adam</button><button id="upgrades">Geliştirmeler</button><button id="storage">▣ Depo</button><button id="transport">Taşıma filosu</button></nav><div id="stockbar" aria-label="Temel stoklar"></div><canvas id="canvas"></canvas><aside id="panel" hidden><button id="close" aria-label="Paneli kapat">×</button><button id="panelBack" hidden>← Geri</button><h2 id="heading"></h2><div id="content"></div></aside><div id="toast" role="status" hidden></div></main>
+<main id="game" hidden><nav id="toolbar"><button id="menu">Menü</button><button id="world">Adalar</button><button id="home">Adam</button><button id="upgrades">Geliştirmeler</button><button id="storage">▣ Depo</button><button id="transport">Taşıma filosu</button></nav><div id="stockbar" aria-label="Temel stoklar"></div><canvas id="canvas"></canvas><aside id="panel" hidden><div class="panel-heading"><button id="close" aria-label="Paneli kapat">×</button><button id="panelBack" hidden>← Geri</button><h2 id="heading"></h2></div><div id="content"></div></aside><div id="toast" role="status" hidden></div><section id="trade-notice" aria-label="Takas bildirimleri" hidden><button id="trade-notice-toggle" aria-controls="trade-notice-list" aria-expanded="false">Takas teklifleri</button><div id="trade-notice-list" aria-live="polite" hidden></div></section></main>
 <script type="module">
-import {terrain as terrainAt, fertility, land, capacity, upgradeCost, technologies, occupied, workPath, cycleLength, pay, validBuild, price, loadCount, upgradeBuildingCost, horsePrice, CATEGORIES, technologies as treeData, mineralChoices, basePrices, nearWater, cityTier, cityTiers, transportStats, productionSources, recipes} from '/logic.js?v=15';
+import {terrain as terrainAt, fertility, land, capacity, upgradeCost, technologies, occupied, workPath, cycleLength, pay, validBuild, price, loadCount, upgradeBuildingCost, horsePrice, CATEGORIES, technologies as treeData, mineralChoices, basePrices, nearWater, cityTier, cityTiers, transportStats, productionSources, recipes} from '/logic.js?v=16';
 function terrain(x,y){return terrainAt(x,y,selected,state?.islands[selected])}
 const names={engines:'Motor',tin:'Kalay',silver:'Gümüş',bronze:'Bronz',silverware:'Gümüş eşya',tools:'Alet',wood:'Odun',stone:'Taş',food:'Yiyecek',wool:'Yün',yarn:'İplik',clothes:'Kıyafet',iron:'Demir',copper:'Bakır',coal:'Kömür',steel:'Çelik',machines:'Makine'},labels={motorAtolyesi:'Motor atölyesi',bronz:'Bronz dökümhanesi',gumusisleme:'Gümüş atölyesi',demirci:'Demirci',oduncu:'Oduncu',tas:'Taş ocağı',balik:'Balıkçı',koyun:'Koyun çiftliği',iplik:'İplikhane',terzi:'Terzi',demir:'Demir madeni',bakir:'Bakır madeni',liman:'Liman',komur:'Kömür madeni',celik:'Çelik atölyesi',makine:'Makine atölyesi'},terrainNames={grass:'Çayır',forest:'Orman',rock:'Kayalık',mountain:'Dağ',lake:'Göl',coast:'Kıyı',city:'Şehir',sea:'Deniz'};
 const el=id=>document.getElementById(id),canvas=el('canvas'),ctx=canvas.getContext('2d');let receivedAt=0;let ws,state,selected=0,view='island',zoom=1,pan={x:0,y:0},pick=null,panelMode=null,W=1000,H=700,anim=0,lastFrame=0;
@@ -90,7 +114,7 @@ function say(message){
   clearTimeout(toastTimer);
   toastTimer=setTimeout(()=>{toast.hidden=true;},3500);
 }function send(m){if(state&&['build','move','demolish','road','buildingUpgrade','storageUpgrade','productionUpgrade','colonize','buyHorse','extract'].includes(m.type))m.island=selected;if(ws?.readyState===1)ws.send(JSON.stringify(m));else say('Bağlantı yok. Yeniden katıl.');}
-function connect(mode){if(!el('name').value.trim()){el('hint').textContent='Adını yaz.';return;}let room=mode==='test'?(localStorage.adaTestRoom||(localStorage.adaTestRoom=crypto.randomUUID())):el('room').value;if(mode!=='test')localStorage.adaRoom=room;localStorage.adaName=el('name').value;history.replaceState(null,'',mode==='test'?'?mode=test':'?room='+encodeURIComponent(room));if(ws)ws.close();state=null;pick=null;panelMode=null;el('panel').hidden=true;let socket=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/api?room='+encodeURIComponent(room)+'&mode='+mode);ws=socket;socket.onopen=()=>socket.send(JSON.stringify({type:'join',token,name:el('name').value}));socket.onmessage=e=>{if(ws!==socket)return;let m=JSON.parse(e.data);if(m.error){say(m.error);el('hint').textContent=m.error;return;}if(m.ack){panelSignature='';extraSignature='';if(m.ack==='save'){rememberWorld(m.savedAt);say('Oyun kaydedildi · '+new Date(m.savedAt).toLocaleTimeString('tr-TR'));}else say('İşlem tamamlandı.');return;}let first=!state;state=m;receivedAt=performance.now();updateStockbar();if(first){selected=m.you;view='island';el('lobby').hidden=true;el('game').hidden=false;resize();focus(6,6);rememberWorld();}el('status').textContent=(m.mode==='test'?'TEST · ':'ORTAK · ')+(m.running?'Dünya ilerliyor':'Duraklatıldı · Oyuncu bekleniyor')+' · '+m.tick+' sn · Altın: '+m.islands[m.you].money;refreshPanel();};socket.onclose=()=>{if(ws!==socket)return;if(state)state.running=false;el('status').textContent='Bağlantı kesildi. Yeniden katıl.';el('game').hidden=true;el('lobby').hidden=false;};}
+function connect(mode){if(!el('name').value.trim()){el('hint').textContent='Adını yaz.';return;}let room=mode==='test'?(localStorage.adaTestRoom||(localStorage.adaTestRoom=crypto.randomUUID())):el('room').value;if(mode!=='test')localStorage.adaRoom=room;localStorage.adaName=el('name').value;history.replaceState(null,'',mode==='test'?'?mode=test':'?room='+encodeURIComponent(room));if(ws)ws.close();state=null;pick=null;panelMode=null;el('panel').hidden=true;let socket=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/api?room='+encodeURIComponent(room)+'&mode='+mode);ws=socket;socket.onopen=()=>socket.send(JSON.stringify({type:'join',token,name:el('name').value}));socket.onmessage=e=>{if(ws!==socket)return;let m=JSON.parse(e.data);if(m.error){say(m.error);el('hint').textContent=m.error;return;}if(m.ack){panelSignature='';extraSignature='';if(m.ack==='save'){rememberWorld(m.savedAt);say('Oyun kaydedildi · '+new Date(m.savedAt).toLocaleTimeString('tr-TR'));}else say('İşlem tamamlandı.');return;}let first=!state;state=m;receivedAt=performance.now();updateStockbar();if(first){selected=m.you;view='island';el('lobby').hidden=true;el('game').hidden=false;resize();focus(6,6);rememberWorld();}el('status').textContent=(m.mode==='test'?'TEST · ':'ORTAK · ')+(m.running?'Dünya ilerliyor':'Duraklatıldı · Oyuncu bekleniyor')+' · '+m.tick+' sn · Altın: '+m.islands[m.you].money;refreshPanel();updateBarterNotice(first);};socket.onclose=()=>{if(ws!==socket)return;if(state)state.running=false;el('status').textContent='Bağlantı kesildi. Yeniden katıl.';el('game').hidden=true;el('lobby').hidden=false;};}
 el('join').onclick=()=>connect('coop');el('solo').onclick=()=>connect('test');el('invite').onclick=async()=>{let url=location.origin+'/?room='+encodeURIComponent(el('room').value);try{await navigator.clipboard.writeText(url);el('hint').textContent='Davet bağlantısı kopyalandı.'}catch{el('hint').textContent=url}};
 function leaveGame(){const old=ws;ws=null;old?.close();state=null;el('game').hidden=true;el('lobby').hidden=false;history.replaceState(null,'',location.pathname);el('status').textContent='Birlikte veya test modunda oyna.'}setInterval(()=>{if(document.visibilityState==='visible'&&ws?.readyState===1)send({type:'ping'})},2000);document.addEventListener('visibilitychange',()=>{if(document.hidden)ws?.close()});addEventListener('pagehide',()=>ws?.close());
 const svgParts={wood:'<path fill="#8c5738" d="M4 10h23v15H4z"/><circle cx="5" cy="17" r="7" fill="#d3a365"/><circle cx="5" cy="17" r="4" fill="none" stroke="#855638"/><path stroke="#bd8752" d="M12 13h13M13 20h13"/>',stone:'<path fill="#a7b3b5" d="m3 24 4-14 12-5 10 13-5 9H8z"/><path fill="#697d84" d="m19 5-3 14 8 8 5-9z"/>',food:'<path fill="#dba749" d="M3 23C1 7 28 4 29 23v4H3z"/><path stroke="#f6d18b" stroke-width="3" d="m9 13 3 8m5-10 3 9"/>',wool:'<path fill="#ede9d9" d="M8 26C-3 22 3 13 7 12 5 2 18 1 21 8c12-2 13 13 5 15-4 8-13 8-18 3"/>',yarn:'<circle fill="#d4a69e" cx="16" cy="16" r="12"/><path fill="none" stroke="#916b72" d="m7 8 18 15M4 15l18 11M11 5l17 14M10 27l12-22"/>',clothes:'<path fill="#7db8c4" d="m10 4-8 7 5 7 4-3v13h12V15l4 3 4-7-8-7-6 4z"/>',iron:'<path fill="#899fad" d="m3 20 6-12h17l4 12-7 6H6z"/><path fill="#c5d7dc" d="m9 8 3 12h18L26 8z"/>',copper:'<path fill="#b36b43" d="m3 20 6-12h17l4 12-7 6H6z"/><path fill="#e3a16b" d="m9 8 3 12h18L26 8z"/>'};
@@ -186,8 +210,8 @@ function extraPanel(){let a=state.islands[selected],mine=state.islands[state.you
  if(mode==='port'){voyageCards(c);button(c,'Ticaret · Satış ilanları',()=>openSubPanel('portTrade'));button(c,'Diğer limanlar',()=>el('world').click());if(selected===state.you)button(c,state.mode==='test'?'Gezgin tüccar ve takas':'Takas ve otomatik ticaret',()=>openSubPanel('trade'));buildingActions(c,b);let p=document.createElement('p');p.innerHTML='⛵ Yük gemisi · kapasite 20'+cost(30,10);c.append(p);button(c,'Gemi inşa et',()=>send({type:'ship',x:b.x,y:b.y}));text(c,'Rotalar her yönde en fazla 20 ürün taşır. Tek yön 30 saniye; limanda 4 saniye. Değişiklikler gemi boşken limanda yapılır.');for(let [id,sh] of state.ships.entries()){if(sh.owner!==state.you)continue;let card=document.createElement('section');card.className='tradecard';c.append(card);text(card,'Gemi '+(id+1),'h3');text(card,'').id='ship-live-'+id;if(sh.purchase){text(card,'Satın alma seferinde.');continue;}if(sh.contract){text(card,'Onaylanmış takas siparişini taşıyor.');continue}let destinations=Object.fromEntries(state.islands.map((a,i)=>[i,a.name]).filter(([i])=>i!==state.you&&state.islands[i].owner&&state.islands[i].plots.some(b=>b.kind==='liman')));if(!Object.keys(destinations).length){text(card,'Diğer oyuncunun liman kurması gerekiyor. Test modunda Ticaret menüsündeki gezgin tüccarı kullan.');continue;}let to=field(card,'Hedef liman',sh.to,destinations),good=field(card,'Gidişte satılacak ürün',sh.good,names),amount=field(card,'Gidiş miktarı (0–20)',sh.amount),buy=field(card,'Dönüşte alınacak ürün',sh.buy,names),buyAmount=field(card,'Dönüş miktarı (0–20)',sh.buyAmount),reserve=field(card,'Kendi depomda kalsın',sh.minStock),min=field(card,'En düşük satış fiyatı',sh.minSell),max=field(card,'En yüksek alış fiyatı',sh.maxBuy);button(card,'Rotayı kaydet ve başlat',()=>send({type:'route',id,to:Number(to.value),good:good.value,buy:buy.value,amount:Number(amount.value),buyAmount:Number(buyAmount.value),minStock:Number(reserve.value),minSell:Number(min.value),maxBuy:Number(max.value),enabled:true}));button(card,'Bu seferden sonra dur',()=>send({type:'stopShip',id}));}liveExtra();return true;}
  text(c,'Diğer oyuncunun otomatik alım-satımına izin ver: '+(mine.market?'Açık':'Kapalı'));button(c,mine.market?'Alım-satım iznini kapat':'Alım-satım iznini aç',()=>send({type:'market',enabled:!mine.market}));text(c,'Fiyat stok azaldıkça yükselir. Satın alanın parası ve deposu, satanın stoku kontrol edilir. Sığmayan veya satılamayan yük gemide kalır.');
  if(state.mode==='test'){text(c,'Gezgin tüccar','h3');text(c,'').id='trader-live';let good=field(c,'Tüccar ürünü','copper',names),amount=field(c,'Tüccar miktarı (1–100)',10);button(c,'Satın al',()=>send({type:'trader',good:good.value,amount:Number(amount.value),buy:true}));button(c,'Tüccara sat',()=>send({type:'trader',good:good.value,amount:Number(amount.value),buy:false}));text(c,'Fiyatlar birim başınadır. Tüccarın stoğu her 60 dünya saniyesinde 10 ürün yenilenir.');for(let g of Object.keys(names)){let p=text(c,'');p.className='muted';p.id='quote-'+g;}}
- else{let other=state.players.find(p=>p.island!==state.you);if(other){text(c,other.name+' · Liman fiyatları','h3');text(c,'Alım-satım izni: '+(state.islands[other.island].market?'açık':'kapalı'));for(let g of Object.keys(names)){let p=text(c,'');p.className='muted';p.id='market-'+other.island+'-'+g;}text(c,'Takas siparişi → '+other.name,'h3');let give=field(c,'Vereceğim ürün','wood',names),giveN=field(c,'Vereceğim miktar (1–20)',10),receive=field(c,'İstediğim ürün',mine.resource==='iron'?'copper':'iron',names),receiveN=field(c,'İstediğim miktar (1–20)',10);button(c,'Takas teklifini gönder',()=>send({type:'offer',to:other.island,give:give.value,giveN:Number(giveN.value),receive:receive.value,receiveN:Number(receiveN.value)}));text(c,'Takas karşı taraf onaylayınca yürür. İki liman ve teklif sahibinin boş, durdurulmuş gemisi gerekir. Ürünler onay sırasında ayrılır.');}else text(c,'Takas için diğer oyuncunun katılması gerekiyor.');}
- for(let co of state.contracts.slice(-12).reverse()){let card=document.createElement('section');card.className='tradecard';c.append(card);text(card,'#'+co.id+' · '+state.islands[co.from].name+' → '+state.islands[co.to].name);let p=document.createElement('p');p.innerHTML=costs({[co.give]:co.giveN})+' ⇄ '+costs({[co.receive]:co.receiveN});card.append(p);text(card,{pending:'Onay bekliyor',rejected:'Reddedildi',shipping:'Gidişte',returning:'Dönüşte',done:'Tamamlandı'}[co.status]||co.status);if(co.to===state.you&&co.status==='pending'){button(card,'Kabul et',()=>send({type:'reply',id:co.id,accept:true}));button(card,'Reddet',()=>send({type:'reply',id:co.id,accept:false}));}}
+ else{let other=state.players.find(p=>p.island!==state.you);if(other){text(c,other.name+' · Liman fiyatları','h3');text(c,'Alım-satım izni: '+(state.islands[other.island].market?'açık':'kapalı'));for(let g of Object.keys(names)){let p=text(c,'');p.className='muted';p.id='market-'+other.island+'-'+g;}text(c,'Takas siparişi → '+other.name,'h3');let give=field(c,'Vereceğim ürün','wood',names),giveN=field(c,'Vereceğim miktar (1–20)',10),receive=field(c,'İstediğim ürün',mine.resource==='iron'?'copper':'iron',names),receiveN=field(c,'İstediğim miktar (1–20)',10);button(c,'Takas teklifini gönder',()=>send({type:'offer',to:other.island,give:give.value,giveN:Number(giveN.value),receive:receive.value,receiveN:Number(receiveN.value)}));text(c,'Takas karşı taraf onaylayınca yürür. İki adada da liman gerekir. Ürünler onayda ayrılır. Teklif sahibinin gemisi limana dönünce sıradaki takas başlar.');}else text(c,'Takas için diğer oyuncunun katılması gerekiyor.');}
+ for(let co of state.contracts.slice(-12).reverse()){let card=document.createElement('section');card.className='tradecard';c.append(card);text(card,'#'+co.id+' · '+state.islands[co.from].name+' → '+state.islands[co.to].name);let p=document.createElement('p');p.innerHTML=costs({[co.give]:co.giveN})+' ⇄ '+costs({[co.receive]:co.receiveN});card.append(p);text(card,{pending:'Onay bekliyor',rejected:'Reddedildi',queued:'Gemi sırada · ürünler ayrıldı',shipping:'Gidişte',returning:'Dönüşte',done:'Tamamlandı'}[co.status]||co.status);if(co.to===state.you&&co.status==='pending'){button(card,'Kabul et',()=>send({type:'reply',id:co.id,accept:true}));button(card,'Reddet',()=>send({type:'reply',id:co.id,accept:false}));}}
  liveExtra();return true;
 }
 
@@ -231,6 +255,9 @@ function updateStockbar(){
     const items=document.createElement('div');
     items.className='stock-items';
     bar.append(items);
+    const points=text(bar,'','span');
+    points.id='research-points-bar';
+    points.title='Araştırma puanı';
     const research=button(bar,'',()=>{
       selectedTechnology=state.islands[state.you].research?.id;
       openPanel('tech');
@@ -241,6 +268,8 @@ function updateStockbar(){
   }
   for(const good of ['wood','stone','food'])el('stock-'+good).textContent=names[good]+' '+island.stock[good];
   el('stock-gold').textContent=island.money;
+  el('research-points-bar').textContent='⚗ '+state.islands[state.you].rp+' AP';
+  el('research-points-bar').setAttribute('aria-label','Araştırma puanı: '+state.islands[state.you].rp);
   const research=state.islands[state.you].research;
   const indicator=el('active-research');
   indicator.hidden=!research;
@@ -361,6 +390,7 @@ function technologyPanel(logisticsOnly=false){
     updateTechnologyDetails(previousDetails,island,selectedTechnology,tech);
     return;
   }
+  const graphScroll=container.querySelector('.technology-graph')?.scrollTop||0;
   container.replaceChildren();
   const graph=document.createElement('div');
   graph.className='technology-graph';
@@ -375,7 +405,6 @@ function technologyPanel(logisticsOnly=false){
         selectedTechnology=id;
         techSignature='';
         technologyPanel(logisticsOnly);
-        if(matchMedia('(max-width:850px)').matches)el('technology-details').scrollIntoView({block:'start'});
       });
       control.className='technology-node';
       control.dataset.tech=id;
@@ -387,6 +416,7 @@ function technologyPanel(logisticsOnly=false){
     graph.append(section);
   }
   container.append(graph);
+  graph.scrollTop=graphScroll;
   const detail=document.createElement('section');
   detail.id='technology-details';
   detail.dataset.node=selectedTechnology;
@@ -911,5 +941,66 @@ function selectWorldIsland(x,y){
   selected=index;
   openPanel('resources');
 }
+
+
+let noticeExpanded=false;
+let noticeSignature='';
+let noticeRoom='';
+let pendingBarter=new Set();
+
+function updateBarterNotice(first){
+  const tray=el('trade-notice');
+  const toggle=el('trade-notice-toggle');
+  const list=el('trade-notice-list');
+  const room=state.mode==='test'?localStorage.adaTestRoom:localStorage.adaRoom;
+  if(first||room!==noticeRoom){
+    noticeRoom=room;
+    noticeExpanded=false;
+    pendingBarter=new Set();
+    noticeSignature='';
+  }
+  const incoming=state.contracts.filter(c=>c.to===state.you&&c.status==='pending');
+  if(incoming.some(c=>!pendingBarter.has(c.id)))noticeExpanded=true;
+  const decided=state.contracts.find(c=>pendingBarter.has(c.id)&&c.status!=='pending');
+  if(decided) say({
+    queued:'Takas kabul edildi. Teklif sahibinin gemisi sırada.',
+    shipping:'Takas kabul edildi. Gemi yola çıktı.',
+    rejected:'Takas teklifi reddedildi.'
+  }[decided.status]||'Takas durumu güncellendi.');
+  pendingBarter=new Set(incoming.map(c=>c.id));
+  tray.hidden=incoming.length===0;
+  list.hidden=!noticeExpanded;
+  toggle.textContent=noticeExpanded?'Teklifleri gizle':'Takas teklifleri ('+incoming.length+')';
+  toggle.setAttribute('aria-expanded',String(noticeExpanded));
+  const signature=JSON.stringify([incoming.map(c=>c.id),state.running]);
+  if(signature===noticeSignature)return;
+  noticeSignature=signature;
+  list.replaceChildren();
+  if(!incoming.length)return;
+  text(list,'Gelen takas teklifleri','h3');
+  for(const contract of incoming){
+    const card=document.createElement('article');
+    card.className='trade-notice-offer';
+    text(card,state.players.find(player=>player.island===contract.from)?.name||state.islands[contract.from].name,'strong');
+    const terms=document.createElement('p');
+    terms.append('Alacaksın ',productChip(contract.give,contract.giveN+' '+names[contract.give]),
+      ' · Vereceksin ',productChip(contract.receive,contract.receiveN+' '+names[contract.receive]));
+    card.append(terms);
+    const actions=document.createElement('div');
+    actions.className='trade-notice-actions';
+    for(const [label,accept] of [['Kabul et',true],['Reddet',false]]){
+      const control=button(actions,label,()=>send({type:'reply',id:contract.id,accept}));
+      control.disabled=!state.running;
+      if(accept)control.className='primary-action';
+    }
+    card.append(actions);
+    list.append(card);
+  }
+}
+
+el('trade-notice-toggle').onclick=()=>{
+  noticeExpanded=!noticeExpanded;
+  updateBarterNotice(false);
+};
 
 </script></html>
