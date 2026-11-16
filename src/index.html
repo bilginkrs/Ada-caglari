@@ -104,13 +104,31 @@
 #level-details-meter{height:11px}
 #level-summary{display:flex;align-items:baseline;justify-content:space-between;gap:7px}
 @media(max-width:680px){#player-level{min-width:59px}#player-level small{font-size:.68rem}}
-</style><header><div><small>ŞEHİR VE PAZAR · 1.9</small><h1>Ada Çağları</h1></div><div id="status">Birlikte bir dünya kurun.</div></header>
+
+.technology-lane{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.technology-node[data-done=true]{background:#a9ce89;border-color:#527645;color:#24391b}
+.technology-node[data-done=true][aria-pressed=true]{outline:2px solid #31581f;outline-offset:-4px}
+.technology-node span,.technology-node small{overflow-wrap:anywhere}
+.technology-node .node-level{font-weight:700}
+.market-tools{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+#market-publish{margin-left:auto}
+.market-tools [aria-pressed=true],.market-post-modes [aria-pressed=true]{background:#dce8ba;border-color:#688650}
+#market-form[hidden],#city-alert-bar[hidden]{display:none}
+#city-alert-bar{background:#8a352b;color:#fff4dc;border-color:#632820;font-weight:700;white-space:nowrap}
+.facility-output{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px;background:#e2e8cc;border-radius:6px}
+@media(max-width:780px){.technology-lane{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style><header><div><small>ÜRETİM VE GELİŞİM · 1.10</small><h1>Ada Çağları</h1></div><div id="status">Birlikte bir dünya kurun.</div></header>
 <section id="lobby"><h2>İki kıyı, ortak bir hikâye.</h2><p>Ortak dünyada ikiniz de bağlıyken zaman ilerler. Test dünyasında tek başına oynayabilirsin.</p><input id="name" placeholder="Oyuncu adı" maxlength="24"><input id="room" placeholder="Ortak oda kodu"><button id="join">Birlikte oyna</button> <button id="invite">Davet bağlantısını kopyala</button><p><button id="solo">Tek başına test et</button></p><small>Test ilerlemesi ayrı kaydedilir.</small><p id="hint"></p></section>
 <main id="game" hidden><nav id="toolbar"><button id="menu">Menü</button><button id="world">Adalar</button><button id="home">Adam</button><button id="upgrades">Geliştirmeler</button><button id="storage">▣ Depo</button><button id="transport">Taşıma filosu</button><button id="marketplace">Ticaret</button></nav><div id="stockbar" aria-label="Temel stoklar"></div><canvas id="canvas"></canvas><aside id="panel" hidden><div class="panel-heading"><button id="close" aria-label="Paneli kapat">×</button><button id="panelBack" hidden>← Geri</button><h2 id="heading"></h2></div><div id="content"></div></aside><div id="toast" role="status" hidden></div><section id="trade-notice" aria-label="Takas bildirimleri" hidden><button id="trade-notice-toggle" aria-controls="trade-notice-list" aria-expanded="false">Takas teklifleri</button><div id="trade-notice-list" aria-live="polite" hidden></div></section></main>
 <script type="module">
-import {terrain as terrainAt, fertility, land, capacity, upgradeCost, technologies, occupied, workPath, cycleLength, pay, validBuild, price, loadCount, upgradeBuildingCost, horsePrice, CATEGORIES, technologies as treeData, mineralChoices, basePrices, nearWater, cityTier, cityTiers, transportStats, productionSources, recipes, progressionXP, xpForNextLevel, levelReward, universityTiers, cityOrderReward, cityShortageDuration} from '/logic.js?v=19';
+import {terrain as terrainAt, fertility, land, capacity, upgradeCost, technologies, occupied, workPath, cycleLength, pay, validBuild, price, loadCount, upgradeBuildingCost, horsePrice, CATEGORIES, technologies as treeData, mineralChoices, basePrices, nearWater, cityTier, cityTiers, transportStats, productionSources, recipes, progressionXP, xpForNextLevel, levelReward, universityTiers, cityOrderReward, cityShortageDuration, advancedProducts, voyageSeconds} from '/logic.js?v=110';
 function terrain(x,y){return terrainAt(x,y,selected,state?.islands[selected])}
 const names={engines:'Motor',tin:'Kalay',silver:'Gümüş',bronze:'Bronz',silverware:'Gümüş eşya',tools:'Alet',wood:'Odun',stone:'Taş',food:'Yiyecek',wool:'Yün',yarn:'İplik',clothes:'Kıyafet',iron:'Demir',copper:'Bakır',coal:'Kömür',steel:'Çelik',machines:'Makine'},labels={motorAtolyesi:'Motor atölyesi',bronz:'Bronz dökümhanesi',gumusisleme:'Gümüş atölyesi',demirci:'Demirci',oduncu:'Oduncu',tas:'Taş ocağı',balik:'Balıkçı',koyun:'Koyun çiftliği',iplik:'İplikhane',terzi:'Terzi',demir:'Demir madeni',bakir:'Bakır madeni',liman:'Liman',komur:'Kömür madeni',celik:'Çelik atölyesi',makine:'Makine atölyesi'},terrainNames={grass:'Çayır',forest:'Orman',rock:'Kayalık',mountain:'Dağ',lake:'Göl',coast:'Kıyı',city:'Şehir',sea:'Deniz'};
+const advancedBuildings=Object.fromEntries(Object.entries(advancedProducts).map(([good,product])=>[product.building,{...product,good}]));
+for(const [good,product] of Object.entries(advancedProducts)){
+  names[good]=product.name;
+  labels[product.building]=product.label;
+}
 const el=id=>document.getElementById(id),canvas=el('canvas'),ctx=canvas.getContext('2d');let receivedAt=0;let ws,state,selected=0,view='island',zoom=1,pan={x:0,y:0},pick=null,panelMode=null,W=1000,H=700,anim=0,lastFrame=0;
 let token=localStorage.adaToken||(localStorage.adaToken=crypto.randomUUID());el('room').value=new URLSearchParams(location.search).get('room')||localStorage.adaRoom||crypto.randomUUID().slice(0,8);el('name').value=localStorage.adaName||'';
 let toastTimer;
@@ -121,7 +139,11 @@ function say(message){
   clearTimeout(toastTimer);
   toastTimer=setTimeout(()=>{toast.hidden=true;},3500);
 }function send(m){if(state&&['build','move','demolish','road','buildingUpgrade','storageUpgrade','productionUpgrade','colonize','buyHorse','extract'].includes(m.type))m.island=selected;if(ws?.readyState===1)ws.send(JSON.stringify(m));else say('Bağlantı yok. Yeniden katıl.');}
-function connect(mode){if(!el('name').value.trim()){el('hint').textContent='Adını yaz.';return;}let room=mode==='test'?(localStorage.adaTestRoom||(localStorage.adaTestRoom=crypto.randomUUID())):el('room').value;if(mode!=='test')localStorage.adaRoom=room;localStorage.adaName=el('name').value;history.replaceState(null,'',mode==='test'?'?mode=test':'?room='+encodeURIComponent(room));if(ws)ws.close();state=null;pick=null;panelMode=null;el('panel').hidden=true;let socket=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/api?room='+encodeURIComponent(room)+'&mode='+mode);ws=socket;socket.onopen=()=>socket.send(JSON.stringify({type:'join',token,name:el('name').value}));socket.onmessage=e=>{if(ws!==socket)return;let m=JSON.parse(e.data);if(m.error){say(m.error);el('hint').textContent=m.error;return;}if(m.ack){panelSignature='';extraSignature='';if(m.ack==='save'){rememberWorld(m.savedAt);say('Oyun kaydedildi · '+new Date(m.savedAt).toLocaleTimeString('tr-TR'));}else say('İşlem tamamlandı.');return;}let first=!state;const previousProgress=state?.islands[m.you]?.playerProgress;state=m;receivedAt=performance.now();updateStockbar();if(first){selected=m.you;view='island';el('lobby').hidden=true;el('game').hidden=false;resize();focus(6,6);rememberWorld();}el('status').textContent=(m.mode==='test'?'TEST · ':'ORTAK · ')+(m.running?'Dünya ilerliyor':'Duraklatıldı · Oyuncu bekleniyor')+' · '+m.tick+' sn · Altın: '+m.islands[m.you].money;refreshPanel();updateBarterNotice(first);
+function connect(mode){if(!el('name').value.trim()){el('hint').textContent='Adını yaz.';return;}let room=mode==='test'?(localStorage.adaTestRoom||(localStorage.adaTestRoom=crypto.randomUUID())):el('room').value;if(mode!=='test')localStorage.adaRoom=room;localStorage.adaName=el('name').value;history.replaceState(null,'',mode==='test'?'?mode=test':'?room='+encodeURIComponent(room));if(ws)ws.close();state=null;pick=null;panelMode=null;el('panel').hidden=true;let socket=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/api?room='+encodeURIComponent(room)+'&mode='+mode);ws=socket;socket.onopen=()=>socket.send(JSON.stringify({type:'join',token,name:el('name').value}));socket.onmessage=e=>{if(ws!==socket)return;let m=JSON.parse(e.data);if(m.error){say(m.error);el('hint').textContent=m.error;return;}if(m.ack){panelSignature='';extraSignature='';
+if(panelMode==='marketplace'&&['setListing','setBuyListing'].includes(m.ack)){
+  marketplaceSide=m.ack==='setBuyListing'?'buy':'sell';
+  postSide=null;
+}if(m.ack==='save'){rememberWorld(m.savedAt);say('Oyun kaydedildi · '+new Date(m.savedAt).toLocaleTimeString('tr-TR'));}else say('İşlem tamamlandı.');return;}let first=!state;const previousProgress=state?.islands[m.you]?.playerProgress;state=m;receivedAt=performance.now();updateStockbar();if(first){selected=m.you;view='island';el('lobby').hidden=true;el('game').hidden=false;resize();focus(6,6);rememberWorld();}el('status').textContent=(m.mode==='test'?'TEST · ':'ORTAK · ')+(m.running?'Dünya ilerliyor':'Duraklatıldı · Oyuncu bekleniyor')+' · '+m.tick+' sn · Altın: '+m.islands[m.you].money;refreshPanel();updateBarterNotice(first);
 const progress=m.islands[m.you].playerProgress;
 if(previousProgress&&progress&&progress.level>previousProgress.level){
  say('Seviye '+progress.level+' · +'+(progress.goldEarned-previousProgress.goldEarned)+' altın');
@@ -129,7 +151,10 @@ if(previousProgress&&progress&&progress.level>previousProgress.level){
 el('join').onclick=()=>connect('coop');el('solo').onclick=()=>connect('test');el('invite').onclick=async()=>{let url=location.origin+'/?room='+encodeURIComponent(el('room').value);try{await navigator.clipboard.writeText(url);el('hint').textContent='Davet bağlantısı kopyalandı.'}catch{el('hint').textContent=url}};
 function leaveGame(){const old=ws;ws=null;old?.close();state=null;el('game').hidden=true;el('lobby').hidden=false;history.replaceState(null,'',location.pathname);el('status').textContent='Birlikte veya test modunda oyna.'}setInterval(()=>{if(document.visibilityState==='visible'&&ws?.readyState===1)send({type:'ping'})},2000);document.addEventListener('visibilitychange',()=>{if(document.hidden)ws?.close()});addEventListener('pagehide',()=>ws?.close());
 const svgParts={wood:'<path fill="#8c5738" d="M4 10h23v15H4z"/><circle cx="5" cy="17" r="7" fill="#d3a365"/><circle cx="5" cy="17" r="4" fill="none" stroke="#855638"/><path stroke="#bd8752" d="M12 13h13M13 20h13"/>',stone:'<path fill="#a7b3b5" d="m3 24 4-14 12-5 10 13-5 9H8z"/><path fill="#697d84" d="m19 5-3 14 8 8 5-9z"/>',food:'<path fill="#dba749" d="M3 23C1 7 28 4 29 23v4H3z"/><path stroke="#f6d18b" stroke-width="3" d="m9 13 3 8m5-10 3 9"/>',wool:'<path fill="#ede9d9" d="M8 26C-3 22 3 13 7 12 5 2 18 1 21 8c12-2 13 13 5 15-4 8-13 8-18 3"/>',yarn:'<circle fill="#d4a69e" cx="16" cy="16" r="12"/><path fill="none" stroke="#916b72" d="m7 8 18 15M4 15l18 11M11 5l17 14M10 27l12-22"/>',clothes:'<path fill="#7db8c4" d="m10 4-8 7 5 7 4-3v13h12V15l4 3 4-7-8-7-6 4z"/>',iron:'<path fill="#899fad" d="m3 20 6-12h17l4 12-7 6H6z"/><path fill="#c5d7dc" d="m9 8 3 12h18L26 8z"/>',copper:'<path fill="#b36b43" d="m3 20 6-12h17l4 12-7 6H6z"/><path fill="#e3a16b" d="m9 8 3 12h18L26 8z"/>'};
-svgParts.tools='<path fill="#bfc9c5" d="M4 3h22v9H4z"/><path fill="#ae7d4e" d="M12 10h7v21h-7z"/>';svgParts.tin=svgParts.iron;svgParts.silver=svgParts.iron;svgParts.bronze=svgParts.copper;svgParts.silverware=svgParts.machines||svgParts.iron;svgParts.coal='<path fill="#404d54" d="m3 24 4-14 12-5 10 13-5 9H8z"/>';svgParts.engines='<path fill="#647879" d="M4 8h20v17H4zM24 12h5v8h-5z"/><path fill="#e4c777" d="M8 4h11v5H8zM8 13h11v3H8zm0 6h11v3H8z"/>';svgParts.steel=svgParts.iron;svgParts.machines='<path fill="#c9b57f" d="M3 8h26v19H3z"/><circle cx="16" cy="17" r="7" fill="#526c73"/><circle cx="16" cy="17" r="3" fill="#dec799"/>';function icon(k){return '<svg class="icon" data-material="'+k+'" viewBox="0 0 32 32" role="img" aria-label="'+names[k]+'">'+svgParts[k]+'</svg>'}function cost(wood,stone){return '<div class="cost">'+icon('wood')+' '+wood+' Odun &nbsp; '+icon('stone')+' '+stone+' Taş</div>'}const panelHistory=[];
+svgParts.tools='<path fill="#bfc9c5" d="M4 3h22v9H4z"/><path fill="#ae7d4e" d="M12 10h7v21h-7z"/>';svgParts.tin=svgParts.iron;svgParts.silver=svgParts.iron;svgParts.bronze=svgParts.copper;svgParts.silverware=svgParts.machines||svgParts.iron;svgParts.coal='<path fill="#404d54" d="m3 24 4-14 12-5 10 13-5 9H8z"/>';svgParts.engines='<path fill="#647879" d="M4 8h20v17H4zM24 12h5v8h-5z"/><path fill="#e4c777" d="M8 4h11v5H8zM8 13h11v3H8zm0 6h11v3H8z"/>';svgParts.steel=svgParts.iron;svgParts.machines='<path fill="#c9b57f" d="M3 8h26v19H3z"/><circle cx="16" cy="17" r="7" fill="#526c73"/><circle cx="16" cy="17" r="3" fill="#dec799"/>';for(const [good,product] of Object.entries(advancedProducts)){
+  svgParts[good]='<path fill="'+product.color+'" d="M3 10l13-6 13 6v14l-13 5-13-5z"/><path fill="#f3dfac" d="M9 13h14v3H9zm3 6h8v3h-8z"/>';
+}
+function icon(k){return '<svg class="icon" data-material="'+k+'" viewBox="0 0 32 32" role="img" aria-label="'+names[k]+'">'+svgParts[k]+'</svg>'}function cost(wood,stone){return '<div class="cost">'+icon('wood')+' '+wood+' Odun &nbsp; '+icon('stone')+' '+stone+' Taş</div>'}const panelHistory=[];
 function openPanel(mode){
   panelHistory.length=0;
   if(mode==='cityNeeds')delete el('content').dataset.cityIsland;
@@ -197,7 +222,7 @@ function oldHouse(x,y,kind){if(kind==='liman'){for(let i=0;i<5;i++){ctx.fillStyl
 function legacyPerson(x,y,phase){ctx.fillStyle='#ebc59c';ctx.fillRect(x-2,y-12,5,5);ctx.fillStyle='#dbad55';ctx.fillRect(x-3,y-7,7,7);ctx.fillStyle='#253d46';let d=Math.sin(phase)*2;ctx.fillRect(x-3,y,2,5+d);ctx.fillRect(x+2,y,2,5-d);ctx.strokeStyle='#c2c9bd';ctx.beginPath();ctx.moveTo(x+4,y-4);ctx.lineTo(x+10,y-11+Math.sin(phase)*5);ctx.stroke()}
 function draw(now){requestAnimationFrame(draw);if(!state||el('game').hidden)return;if(now-lastFrame<33)return;let dt=Math.min(100,now-lastFrame);lastFrame=now;if(state.running)anim+=dt/1000;ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#2f86b5';ctx.fillRect(0,0,W,H);for(let i=0;i<100;i++){ctx.fillStyle='#a2d8da';ctx.fillRect((i*127)%W,(i*83)%H,18,2)}mini.hidden=view!=='island';confirmBuild.hidden=cancelBuild.hidden=view!=='island'||!preview;if(view==='world'){drawWorld(worldLayout());return;}ctx.save();ctx.translate(pan.x,pan.y);ctx.scale(zoom,zoom);let a=state.islands[selected],plots=new Map(a.plots.map(b=>[b.x+','+b.y,b])),map=islandTerrainLayer(a,selected);drawIslandShallows(a,selected);for(let sum=0;sum<=70;sum++)for(let x=Math.max(0,sum-35);x<=Math.min(35,sum);x++){let y=sum-x,p=tile(x,y),screenX=p.x*zoom+pan.x,screenY=p.y*zoom+pan.y;if(screenX< -100||screenX>W+100||screenY< -100||screenY>H+150)continue;let t=map.at(x,y);if(t==='sea')continue;let b=plots.get(x+','+y),col=occupied(a,x,y)?.kind==='koyun'?'#a9aa6c':t==='coast'?((x+y)%3?'#ebcc86':'#f2d89d'):t==='lake'?'#5ac4c8':t==='mountain'?'#7a8471':t==='city'?'#d4bd82':(x+y)%2?'#87b84e':'#8dbd54';poly([[p.x,p.y],[p.x+32,p.y+19],[p.x,p.y+38],[p.x-32,p.y+19]],col);ctx.strokeStyle='#638e3c55';ctx.stroke();if(pick&&pick.x===x&&pick.y===y){ctx.strokeStyle='#ffe1a1';ctx.lineWidth=2;ctx.stroke();ctx.lineWidth=1;}if(b){house(p.x,p.y+19,b.kind);}else if(t==='forest')tree(p.x,p.y+19);else if(t==='mountain'){pixelObject('mountain',p.x,p.y+19)}else if(t==='rock'){pixelObject('rock',p.x,p.y+19)}else if(t==='city')drawCityTile(a,x,y,p);}
 
-drawRoads(a);drawSelectedDeliveries(a);drawDepot(a);drawDetails(a,now);drawFacilityBadges(a);ctx.restore();drawMini(a);}requestAnimationFrame(draw);
+drawRoads(a);drawSelectedDeliveries(a);drawDepot(a);drawDetails(a,now);drawFacilityBadges(a);drawCityWarning(a);ctx.restore();drawMini(a);}requestAnimationFrame(draw);
 let pointer,pinch=null;const touches=new Map();canvas.onpointerdown=e=>{touches.set(e.pointerId,{x:e.clientX,y:e.clientY});if(touches.size===2){let [a,b]=[...touches.values()],r=canvas.getBoundingClientRect(),cx=(a.x+b.x)/2-r.left,cy=(a.y+b.y)/2-r.top;pinch={distance:Math.hypot(a.x-b.x,a.y-b.y),zoom,x:(cx-pan.x)/zoom,y:(cy-pan.y)/zoom};pointer=null;canvas.setPointerCapture(e.pointerId);return;}pointer={x:e.clientX,y:e.clientY,px:pan.x,py:pan.y,max:0};canvas.setPointerCapture(e.pointerId)};canvas.onpointermove=e=>{if(touches.has(e.pointerId))touches.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pinch&&touches.size===2&&view==='island'){let [a,b]=[...touches.values()],r=canvas.getBoundingClientRect();zoom=Math.max(.35,Math.min(2.2,pinch.zoom*Math.hypot(a.x-b.x,a.y-b.y)/Math.max(1,pinch.distance)));pan.x=(a.x+b.x)/2-r.left-pinch.x*zoom;pan.y=(a.y+b.y)/2-r.top-pinch.y*zoom;return;}if(pointer)pointer.max=Math.max(pointer.max,Math.hypot(e.clientX-pointer.x,e.clientY-pointer.y));if(!pointer)return;pan.x=pointer.px+e.clientX-pointer.x;pan.y=pointer.py+e.clientY-pointer.y;if(view==='world'){pan.x=Math.max(-W,Math.min(W,pan.x));pan.y=Math.max(-H,Math.min(H,pan.y));}};canvas.onpointerup=e=>{touches.delete(e.pointerId);if(pinch){if(!touches.size)pinch=null;pointer=null;return;}if(!pointer)return;let moved=Math.max(pointer.max||0,Math.hypot(e.clientX-pointer.x,e.clientY-pointer.y));pointer=null;if(moved>8||!state)return;let r=canvas.getBoundingClientRect(),cx=e.clientX-r.left,cy=e.clientY-r.top;if(view==='world'){selectWorldIsland(cx,cy);return;}if(!preview&&!moving){const mapX=(cx-pan.x)/zoom,mapY=(cy-pan.y)/zoom;const badge=hitFacilityBadge(state.islands[selected],mapX,mapY);revealFacilityReason=!!badge;let hit=badge||hitBuilding(mapX,mapY);if(hit){pick={x:hit.x,y:hit.y};openPanel('tile');return;}}let dx=(cx-pan.x)/zoom/32,dy=(cy-pan.y)/zoom/19,x=Math.floor((dx+dy)/2),y=Math.floor((dy-dx)/2);if(x<0||y<0||x>35||y>35){say('Ada üzerinde bir kare seç.');return;}if(preview){preview.x=x;preview.y=y;pick={x,y};return;}pick={x,y};if(x===26&&y===26&&!moving){openPanel('storage');return;}openPanel(moving?'moveConfirm':terrain(x,y)==='city'&&(selected===state.you||state.islands[selected].controller===state.you)?'cityNeeds':'tile')};canvas.onpointercancel=()=>{pointer=null;pinch=null;touches.clear()};
 let moving=null,extraSignature='';
 
@@ -206,6 +231,9 @@ function text(parent,t,tag='p'){let p=document.createElement(tag);p.textContent=
 function costs(obj){return Object.entries(obj).map(([g,n])=>icon(g)+' '+n+' '+names[g]).join(' · ')}
 function field(parent,label,value,options){let l=document.createElement('label');l.textContent=label;let input=document.createElement(options?'select':'input');input.setAttribute('aria-label',label);if(options)for(let [k,v] of Object.entries(options))input.add(new Option(v,k));else{input.type='number';input.min=0;input.max=9999;}input.value=value;l.append(input);parent.append(l);return input}
 function buildingActions(c,b,compact=false){if(['demir','bakir','komur'].includes(b.kind)){let opts=mineralChoices({...state.islands[selected],tech:state.islands[state.you].tech},selected,b),sel=field(c,'Çıkarılacak maden',b.extract||opts[0],Object.fromEntries(opts.map(g=>[g,names[g]])));button(c,'Maden türünü değiştir',()=>send({type:'extract',x:b.x,y:b.y,good:sel.value}));text(c,'Kalay: Metalürji II + seviye 2 maden (çift numaralı adalar). Gümüş: Metalürji III + seviye 3 maden (tek numaralı adalar).');}if(!compact&&b.worker)text(c,'İşçi: '+({out:'Kaynağa gidiyor',work:'Kaynakta çalışıyor',back:'Yükle dönüyor',deliver:'Teslim ediyor',blocked:'Yol / kaynak bekliyor'}[b.worker.stage]||b.worker.stage));if(!compact&&b.output&&Object.values(b.output).some(n=>n)){let loc=document.createElement('p');loc.innerHTML='Tesisteki ürünler: '+costs(b.output);c.append(loc);}if(!compact&&b.inventory&&Object.values(b.inventory).some(n=>n)){let loc=document.createElement('p');loc.innerHTML='Tesisteki hammaddeler: '+costs(b.inventory);c.append(loc);}if(b.kind!=='liman'){if(!compact)text(c,'Seviye '+(b.level||1)+'/5 · '+(b.status||'Üretim bekleniyor')+' · Potansiyel: '+(b.rate||60/cycleLength(b)).toFixed(1)+'/dk · Son 60 sn: '+(b.actual||0)+' ürün');let u=button(c,'Bu binayı geliştir',()=>send({type:'buildingUpgrade',x:b.x,y:b.y}));u.disabled=b.level>=5;let cp=document.createElement('p');cp.innerHTML=costs(upgradeBuildingCost(b));c.append(cp);}button(c,'Taşı · Ücretsiz',()=>{moving={x:b.x,y:b.y,kind:b.kind};el('panel').hidden=true;panelMode=null;});button(c,'Yık · 5 odun + 2 taş iade',()=>{openSubPanel('demolishConfirm')}).className='danger';}
+function cityTime(seconds){
+  return Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0');
+}
 function liveExtra(){if(!state)return;let a=state.islands[state.you];const set=(id,value)=>{if(el(id))el(id).textContent=value};const city=state.islands[selected];
  const tier=cityTier(city);
  const demand=tier.demand;
@@ -218,11 +246,14 @@ function liveExtra(){if(!state)return;let a=state.islands[state.you];const set=(
    if(shortage!==null)timer.value=shortage;
  }
  set('city-shortage-clock',shortage===null?'Kıtlık sayacı beklemede':
-   'Nüfus kaybına '+Math.floor(shortage/60)+':'+String(shortage%60).padStart(2,'0')+(state.running?'':' · Duraklatıldı'));
+   'Nüfus kaybına '+cityTime(shortage)+(state.running?'':' · Duraklatıldı'));
  const missing=Object.entries(demand).filter(([good,n])=>(city.citySupply[good]||0)<n).map(([good])=>names[good]);
  set('city-shortage-goods',shortage!==null&&missing.length?'Eksik ihtiyaçlar · '+missing.join(', '):'');
+ const remaining=city.cityConsumedAt===undefined?0:Math.max(0,30-(state.tick-city.cityConsumedAt));
+ set('city-next-consumption','Sonraki tüketim · '+(30-state.tick%30)+' sn');
  for(const [good,amount] of Object.entries(demand)){
-   updateRequirement('city-supply-'+good,city.citySupply[good]||0,amount);
+   const supplied=city.citySupply[good]||0;
+   updateRequirement('city-supply-'+good,supplied,amount,supplied*remaining/30);
  }
  const upgrade=el('city-upgrade'), next=cityTiers[city.cityLevel+1];
  if(next){
@@ -339,6 +370,15 @@ function updateStockbar(){
     });
     research.id='active-research';
     research.hidden=true;
+    const alert=button(bar,'',()=>{
+      if(!state)return;
+      selected=Number(alert.dataset.island);
+      view='island';
+      focus(29,29);
+      openPanel('cityNeeds');
+    });
+    alert.id='city-alert-bar';
+    alert.hidden=true;
     items.innerHTML=['wood','stone','food'].map(g=>'<button class="material-link" data-recipe="'+g+'">'+icon(g)+'<b id="stock-'+g+'"></b></button>').join('')+'<span><svg width="28" height="28" viewBox="0 0 32 32" role="img" aria-label="Altın"><circle cx="16" cy="16" r="13" fill="#f3c647" stroke="#fff1a4" stroke-width="3"/><path d="M10 13h12M10 19h12" stroke="#a47722" stroke-width="3"/></svg><b id="stock-gold"></b></span>';
   }
   for(const good of ['wood','stone','food'])el('stock-'+good).textContent=names[good]+' '+island.stock[good];
@@ -346,6 +386,18 @@ function updateStockbar(){
   el('research-points-bar').textContent='⚗ '+state.islands[state.you].rp+' AP';
   el('research-points-bar').setAttribute('aria-label','Araştırma puanı: '+state.islands[state.you].rp);
   updateLevelBadge(state.islands[state.you]);
+  const alert=el('city-alert-bar');
+  const warning=state.islands.reduce((earliest,city,index)=>{
+    if((index!==state.you&&city.controller!==state.you)||city.cityShortageUntil==null)return earliest;
+    if(earliest&&earliest.until<=city.cityShortageUntil)return earliest;
+    return {index,until:city.cityShortageUntil};
+  },null);
+  alert.hidden=!warning;
+  if(warning){
+    alert.dataset.island=warning.index;
+    alert.textContent='⚠ Şehir '+cityTime(Math.max(0,warning.until-state.tick));
+    alert.title=state.islands[warning.index].name+' · Nüfus kaybına kalan süre';
+  }
   const research=state.islands[state.you].research;
   const indicator=el('active-research');
   indicator.hidden=!research;
@@ -421,7 +473,7 @@ else if(kind==='load-truck'){
 }
 else if(kind==='boat'){shape([[6,40],[57,40],[48,51],[16,51]],ink);shape([[10,42],[53,42],[46,48],[18,48]],wood);r(30,9,3,32,ink);shape([[28,12],[28,36],[9,36]],'#fff0c9');shape([[35,17],[35,37],[52,37]],'#e2d3ab');r(18,40,9,4,'#c79c58');}
 else if(kind.startsWith('worker-')){let job=kind.slice(7),shirt={oduncu:'#398dba',tas:'#417caa',demir:'#826a99',bakir:'#ad7556',komur:'#67665a'}[job]||'#3687b2';r(27,26,12,13,ink);r(28,27,10,11,'#f0bc7c');r(36,31,2,2,ink);r(23,23,20,4,'#edbc43');r(27,19,12,5,'#e4a635');r(28,39,10,10,shirt);r(24,40,4,6,'#f0bc7c');r(38,40,4,6,'#f0bc7c');r(28+(frame%2),49,4,7,ink);r(34-(frame%2),49,4,7,ink);r(26+(frame%2),55,6,2,'#423326');r(34-(frame%2),55,6,2,'#423326');}
-else{let roofs={oduncu:'#a9773e',tas:'#858980',balik:'#468c99',koyun:'#bd5141',iplik:'#a46f88',terzi:'#5b87a3',demir:'#747d7e',bakir:'#a06c49',komur:'#58615b',celik:'#697a7a',makine:'#78917b',demirci:'#ae7042',city:'#be6348',liman:'#b28b4f'};let roof=kind==='bronz'?'#b7834a':kind==='gumusisleme'?'#8d98ac':roofs[kind]||roofs.city;if(kind==='liman'){for(let k=0;k<6;k++){r(6,24+k*4,51,3,k%2?light:wood)}r(9,17,4,37,ink);r(50,17,4,37,ink);r(9,16,4,3,'#d3ac68');r(50,16,4,3,'#d3ac68');r(17,27,12,12,ink);r(18,28,10,10,light);r(22,28,2,10,wood);r(35,35,13,11,ink);r(36,36,11,9,light);pixelCache.set(key,c);return c;}
+else{let roofs={oduncu:'#a9773e',tas:'#858980',balik:'#468c99',koyun:'#bd5141',iplik:'#a46f88',terzi:'#5b87a3',demir:'#747d7e',bakir:'#a06c49',komur:'#58615b',celik:'#697a7a',makine:'#78917b',demirci:'#ae7042',city:'#be6348',liman:'#b28b4f'};let roof=kind==='bronz'?'#b7834a':kind==='gumusisleme'?'#8d98ac':advancedBuildings[kind]?.color||roofs[kind]||roofs.city;if(kind==='liman'){for(let k=0;k<6;k++){r(6,24+k*4,51,3,k%2?light:wood)}r(9,17,4,37,ink);r(50,17,4,37,ink);r(9,16,4,3,'#d3ac68');r(50,16,4,3,'#d3ac68');r(17,27,12,12,ink);r(18,28,10,10,light);r(22,28,2,10,wood);r(35,35,13,11,ink);r(36,36,11,9,light);pixelCache.set(key,c);return c;}
 shape([[10,31],[31,21],[50,31],[50,49],[31,59],[10,49]],ink);shape([[12,33],[31,25],[31,56],[12,47]],kind==='tas'?'#a7a99d':light);shape([[31,25],[48,33],[48,47],[31,56]],kind==='tas'?'#858c85':wood);shape([[6,30],[25,12],[35,12],[55,30],[32,43]],ink);shape([[9,29],[26,15],[34,15],[51,29],[32,39]],roof);shape([[26,15],[34,15],[51,29],[32,39]],roof);for(let k=0;k<3;k++)r(15+k*5,26-k*3,7,2,'#ffffff18');r(34,39,9,15,ink);r(15,36,7,7,ink);r(16,37,5,5,'#e5cc82');
 if(kind==='oduncu'){r(12,33,18,19,ink);r(11,32,3,21,wood);for(let k=0;k<3;k++){r(3+k*6,49,7,5,ink);r(4+k*6,49,5,4,light);r(4+k*6,49,2,3,'#e4b36c')}}
 if(['demir','bakir','komur'].includes(kind)){r(22,30,19,25,ink);r(24,33,15,22,'#333e36');r(20,29,3,28,wood);r(40,29,3,28,wood);r(20,28,23,4,light);r(44,48,14,7,stone);r(46,55,3,3,ink);r(54,55,3,3,ink)}
@@ -433,6 +485,13 @@ if(['celik','makine','demirci'].includes(kind)){r(41,10,6,21,ink);r(42,11,4,19,s
 if(kind==='makine'){r(44,47,14,12,ink);r(46,49,10,8,stone);r(49,50,4,6,'#526d6c')}
 if(kind==='demirci'){r(1,48,14,4,ink);r(4,51,8,5,stone);r(7,56,3,3,ink)}
 if(kind==='celik'){r(44,49,15,4,'#bac7be');r(46,53,15,4,'#899c97')}
+if(advancedBuildings[kind]){
+  const product=advancedBuildings[kind];
+  r(39,11,7,18,ink);r(41,10,4,18,'#9faba1');
+  r(10,37,17,10,ink);r(12,39,13,6,'#ebcb8b');
+  r(47,48,12,9,ink);r(49,50,8,5,product.color);
+  r(39,50,4,7,product.color);
+}
 }pixelCache.set(key,c);return c;}
 function pixelObject(kind,x,y,frame=0,scale=1){ctx.imageSmoothingEnabled=false;ctx.drawImage(sprite(kind,frame),Math.round(x-32*scale),Math.round(y-52*scale),64*scale,64*scale)}
 function house(x,y,kind){let b=pick&&occupied(state.islands[selected],pick.x,pick.y);ctx.save();if(b&&b.kind===kind&&tile(b.x,b.y).x===x&&tile(b.x,b.y).y+19===y){ctx.shadowColor='#ffe875';ctx.shadowBlur=10;ctx.shadowOffsetX=0;ctx.shadowOffsetY=0;}pixelObject(kind,x,y,0,1);ctx.restore();}
@@ -463,7 +522,7 @@ function technologyPanel(logisticsOnly=false){
   const visible=entries.filter(([,tech])=>branches.includes(tech.branch));
   if(!visible.some(([id])=>id===selectedTechnology))selectedTechnology=visible[0][0];
   const tech=treeData[selectedTechnology];
-  const sig=JSON.stringify([logisticsOnly,selectedTechnology,island.tech,island.research,island.rp,island.universityLevel,state.running,
+  const sig=JSON.stringify([logisticsOnly,selectedTechnology,island.cityLevel,island.tech,island.research,island.rp,island.universityLevel,state.running,
     Object.keys(tech.cost).map(g=>island.stock[g])]);
   if(sig===techSignature)return;
   techSignature=sig;
@@ -484,7 +543,6 @@ function technologyPanel(logisticsOnly=false){
     const lane=document.createElement('div');
     lane.className='technology-lane';
     for(const [id,node] of visible.filter(([,item])=>item.branch===branch).sort((a,b)=>a[1].level-b[1].level)){
-      if(lane.firstChild)text(lane,'→','span').setAttribute('aria-hidden','true');
       const control=button(lane,'',()=>{
         selectedTechnology=id;
         techSignature='';
@@ -493,6 +551,7 @@ function technologyPanel(logisticsOnly=false){
       control.className='technology-node';
       control.dataset.tech=id;
       control.append(spritePreview(logisticsSprites[id]||techSprites[branch]));
+      text(control,'Seviye '+node.level,'small').className='node-level';
       text(control,node.name,'span');
       text(control,'','small').className='node-state';
     }
@@ -507,7 +566,7 @@ function technologyPanel(logisticsOnly=false){
   detail.dataset.scope=String(logisticsOnly);
   detail.className='technology-details';
   container.append(detail);
-  text(detail,tech.name,'h3');
+  text(detail,tech.name+' · Seviye '+tech.level,'h3');
   text(detail,tech.unlock);
   const prerequisites=document.createElement('div');
   prerequisites.className='technology-prerequisites';
@@ -517,10 +576,11 @@ function technologyPanel(logisticsOnly=false){
       else{selectedTechnology=key;technologyPanel(logisticsOnly);}
     }).dataset.prerequisite=key;
   }
-  if(prerequisites.childElementCount||tech.university){
+  if(prerequisites.childElementCount||tech.university||tech.cityLevel){
     text(detail,'Ön koşullar','h4');
     detail.append(prerequisites);
   }
+  if(tech.cityLevel)text(detail,'').id='technology-city-requirement';
   if(tech.university)text(detail,'').id='university-requirement';
   for(const [g,n] of Object.entries(tech.cost))stockRequirement(detail,g,n,'research-'+g);
   text(detail,'').id='research-points';
@@ -537,7 +597,8 @@ function updateTechnologyDetails(detail,island,id,tech){
     const done=island.tech.includes(key);
     const active=island.research?.id===key;
     const unlocked=treeData[key].requires.every(req=>island.tech.includes(req))&&
-      (island.universityLevel||0)>=(treeData[key].university||0);
+      (island.universityLevel||0)>=(treeData[key].university||0)&&island.cityLevel>=treeData[key].cityLevel;
+    control.dataset.done=String(done);
     control.setAttribute('aria-pressed',String(key===id));
     control.querySelector('.node-state').textContent=done?'✓ Tamamlandı':active?'◷ Araştırılıyor':unlocked?'Açık':'▣ Kilitli';
   }
@@ -547,6 +608,10 @@ function updateTechnologyDetails(detail,island,id,tech){
   }
   for(const [g,n] of Object.entries(tech.cost))updateRequirement('research-'+g,island.stock[g],n);
   el('research-points').textContent=island.rp+' / '+tech.rp+' araştırma puanı · '+tech.time+' sn';
+  if(tech.cityLevel){
+    el('technology-city-requirement').textContent=(island.cityLevel>=tech.cityLevel?'✓ ':'○ ')+
+      'Şehir seviyesi '+(island.cityLevel+1)+' / '+(tech.cityLevel+1)+' · '+cityTiers[tech.cityLevel].name;
+  }
   if(tech.university){
     const level=island.universityLevel||0;
     el('university-requirement').textContent=(level>=tech.university?'✓ ':'○ ')+
@@ -555,12 +620,27 @@ function updateTechnologyDetails(detail,island,id,tech){
   const start=el('start-research');
   const done=island.tech.includes(id);
   start.textContent=done?'✓ Tamamlandı':island.research?.id===id?'Araştırılıyor · '+island.research.remaining+' sn':'Araştır';
-  start.disabled=!state.running||!!island.research||done||island.rp<tech.rp||(island.universityLevel||0)<(tech.university||0)||
+  start.disabled=!state.running||!!island.research||done||island.rp<tech.rp||island.cityLevel<tech.cityLevel||(island.universityLevel||0)<(tech.university||0)||
     !tech.requires.every(key=>island.tech.includes(key))||
     !Object.entries(tech.cost).every(([g,n])=>island.stock[g]>=n);
 }
 setInterval(fleetLive,1000);
 
+
+function drawCityWarning(island){
+  if(!island.owner||island.cityShortageUntil==null)return;
+  const point=tile(29,29);
+  ctx.save();
+  ctx.translate(point.x,point.y-23);
+  const scale=Math.max(1,1/zoom);
+  ctx.scale(scale,scale);
+  poly([[-25,-6],[25,-6],[25,14],[5,14],[0,20],[-5,14],[-25,14]],'#8a352b');
+  ctx.fillStyle='#fff3d1';
+  ctx.textAlign='center';
+  ctx.font='bold 13px system-ui';
+  ctx.fillText('! '+cityTime(Math.max(0,island.cityShortageUntil-state.tick)),0,9);
+  ctx.restore();
+}
 
 function drawCityTile(island,x,y,point){
   const level=island.cityLevel||0;
@@ -588,7 +668,7 @@ function cityHouse(island,x,y){
   if(x%2 && y%2)return true;
   if(island.cityLevel>=1 && x%2===0 && y%2===0)return true;
   if(island.cityLevel>=2 && x===30)return true;
-  return island.cityLevel>=3 && y===28;
+  return (island.cityLevel>=3&&y===28)||(island.cityLevel>=4&&x+y<=54+island.cityLevel);
 }
 
 function cityPanel(container,island,home,openDrawers){
@@ -602,9 +682,9 @@ function cityPanel(container,island,home,openDrawers){
     if(level===island.cityLevel)stage.setAttribute('aria-current','step');
     const picture=document.createElement('div');
     picture.className='city-silhouette';
-    for(let i=0;i<=level;i++)picture.append(spritePreview('city'));
+    for(let i=0;i<=Math.min(4,level);i++)picture.append(spritePreview('city'));
     stage.append(picture);
-    text(stage,item.name,'strong');
+    text(stage,(level+1)+'. '+item.name,'strong');
     text(stage,item.population+' kişi','span');
     tiers.append(stage);
   }
@@ -619,6 +699,7 @@ function cityPanel(container,island,home,openDrawers){
   text(container,'').id='city-shortage-goods';
   text(container,'Eksikler giderilmezse her 5 oyun dakikasında nüfus azalır. Tüm ihtiyaçlar karşılandığında nüfus toparlanır.','small');
   text(container,'Son tüketim · 30 saniyelik ihtiyaç','h3');
+  text(container,'','small').id='city-next-consumption';
   for(const [g,n] of Object.entries(tier.demand))stockRequirement(container,g,n,'city-supply-'+g);
   if(island===home){
     const orders=cityDrawer(container,'city-orders','Şehir siparişleri · Altın ve araştırma puanı',openDrawers);
@@ -675,11 +756,14 @@ function universitySection(parent,island){
   parent.append(section,document.createElement('hr'));
 }
 
+function hasMarketShip(quantity){
+  return state.ships.some(ship=>ship.owner===state.you&&ship.stage==='home'&&!ship.enabled&&
+    !ship.contract&&!ship.mission&&!ship.purchase&&!ship.expedition&&!loadCount(ship)&&(ship.capacity||20)>=quantity);
+}
+
 function canBuyListing(offer,seller,buyer){
-  return state.running && buyer.money>=offer.gold && (offer.reserved || seller.stock[offer.good]>=offer.quantity) &&
-    buyer.plots.some(b=>b.kind==='liman') && state.ships.some(ship=>ship.owner===state.you &&
-      ship.stage==='home' && !ship.enabled && !ship.contract && !ship.mission && !ship.purchase &&
-      !ship.expedition && !loadCount(ship) && (ship.capacity||20)>=offer.quantity);
+  return state.running&&buyer.money>=offer.gold&&(offer.reserved||seller.stock[offer.good]>=offer.quantity)&&
+    buyer.plots.some(building=>building.kind==='liman')&&hasMarketShip(offer.quantity);
 }
 
 function marketSignature(seller,buyer){
@@ -726,58 +810,142 @@ function listingCard(container,offer,seller,index,buyer){
   container.append(card);
 }
 
+let marketplaceSide='sell',postSide=null;
+
 function marketplacePanel(){
-  const c=el('content');
+  const content=el('content');
   const buyer=state.islands[state.you];
   const ports=state.islands.map((island,index)=>({island,index}))
-    .filter(({island})=>island.owner&&island.plots.some(b=>b.kind==='liman'));
-  const ownPorts=ports.filter(({island,index})=>index===state.you||island.controller===state.you);
-  const portOptions=Object.fromEntries(ownPorts.map(({island,index})=>[index,island.name]));
-  if(panelSignature!==JSON.stringify(portOptions)){
-    panelSignature=JSON.stringify(portOptions);
+    .filter(({island})=>island.owner&&island.plots.some(building=>building.kind==='liman'));
+  const own=({island,index})=>index===state.you||island.controller===state.you;
+  const portOptions=Object.fromEntries(ports.filter(own).map(({island,index})=>[index,island.name]));
+  const formKey=JSON.stringify(portOptions);
+  if(el('market-form')?.dataset.ports!==formKey){
     extraSignature='';
-    c.replaceChildren();
+    content.replaceChildren();
     el('heading').textContent='Ticaret Pazarı';
-    const sale=cityDrawer(c,'market-sale','Satış yap',[]);
-    if(!ownPorts.length)text(sale,'Satışa başlamak için bir liman kur.');
-    else{
-      const port=field(sale,'Satış limanı',ownPorts[0].index,portOptions);
-      const good=field(sale,'Satılacak ürün','wood',names);
-      const quantity=field(sale,'Parti miktarı (1–40)',10);
-      const gold=field(sale,'Partinin toplam fiyatı (altın)',5);
-      const saleButton=button(sale,'Satış ilanını yayınla / güncelle',()=>send({
-        type:'setListing',island:Number(port.value),good:good.value,quantity:Number(quantity.value),gold:Number(gold.value)
-      }));
-      saleButton.id='market-list-submit';
-      text(sale,'İlan miktarı depodan ayrılır. Satışta fiyat partinin tamamı için ödenir. Aynı ürün için tek ilan açabilirsin.','small');
+    const tools=document.createElement('nav');
+    tools.className='market-tools';
+    for(const [side,label] of [['sell','Satış ilanları'],['buy','Alım ilanları']]){
+      const tab=button(tools,label,()=>{marketplaceSide=side;marketplacePanel();});
+      tab.dataset.marketSide=side;
     }
-    button(c,state.mode==='test'?'Gezgin tüccar ve takas':'Takas ve otomatik ticaret',
+    const publish=button(tools,'İlan ver',()=>{
+      postSide=postSide?null:marketplaceSide;
+      marketplacePanel();
+    });
+    publish.id='market-publish';
+    content.append(tools);
+    const form=document.createElement('section');
+    form.id='market-form';
+    form.dataset.ports=formKey;
+    const modes=document.createElement('div');
+    modes.className='market-post-modes';
+    for(const [side,label] of [['sell','Satmak istiyorum'],['buy','Satın almak istiyorum']]){
+      const mode=button(modes,label,()=>{postSide=side;marketplacePanel();});
+      mode.dataset.postSide=side;
+    }
+    form.append(modes);
+    if(!Object.keys(portOptions).length)text(form,'İlan vermek için bir liman kur.');
+    else{
+      const port=field(form,'Liman',Object.keys(portOptions)[0],portOptions);
+      const good=field(form,'Ürün','wood',names);
+      const quantity=field(form,'Parti miktarı (1–40)',10);
+      const gold=field(form,'Partinin toplam fiyatı (altın)',5);
+      const submit=button(form,'İlanı yayınla',()=>send({
+        type:postSide==='buy'?'setBuyListing':'setListing',island:Number(port.value),good:good.value,
+        quantity:Number(quantity.value),gold:Number(gold.value)
+      }));
+      submit.id='market-list-submit';
+      text(form,'','small').id='market-post-note';
+    }
+    content.append(form);
+    button(content,state.mode==='test'?'Gezgin tüccar ve takas':'Takas ve otomatik ticaret',
       ()=>openSubPanel('trade',()=>{selected=state.you;}));
-    text(c,'Satış ilanları','h3');
-    text(c,'Yüke uygun boş gemin varsa buradan sipariş verebilirsin. Gemi, ürünü satıcının limanından getirir.');
     const offers=document.createElement('div');
     offers.id='market-list';
-    c.append(offers);
-    voyageCards(c);
+    content.append(offers);
+    const tracking=document.createElement('div');
+    tracking.id='market-tracking';
+    content.append(tracking);
   }
+  el('market-form').hidden=!postSide;
+  el('market-publish').setAttribute('aria-expanded',String(!!postSide));
+  for(const tab of content.querySelectorAll('[data-market-side]'))tab.setAttribute('aria-pressed',String(tab.dataset.marketSide===marketplaceSide));
+  for(const mode of content.querySelectorAll('[data-post-side]'))mode.setAttribute('aria-pressed',String(mode.dataset.postSide===postSide));
   const submit=el('market-list-submit');
-  if(submit)submit.disabled=!state.running;
-  const listings=ports.filter(({island})=>Object.keys(island.listings||{}).length);
-  const signature=JSON.stringify([state.running,listings.map(({island,index})=>[
-    index,island.owner,island.listings,Object.values(island.listings).map(offer=>
-      canBuyListing(offer,island,buyer)?null:sellerListingBlock(offer,island,buyer))
-  ])]);
+  if(submit){
+    submit.disabled=!state.running;
+    submit.textContent=postSide==='buy'?'Alım ilanını yayınla':'Satış ilanını yayınla';
+    el('market-post-note').textContent=postSide==='buy'?
+      'Teklif ettiğin altın ilanda ayrılır. Satıcı yükü limanına teslim edince ödemesini alır.':
+      'Ürünler depodan ayrılır. Alıcı, gemisini limanına gönderir.';
+  }
+  const selling=marketplaceSide==='sell';
+  const listings=ports.map(entry=>({...entry,offers:Object.values(selling?entry.island.listings:entry.island.buyListings||{})}))
+    .filter(({offers})=>offers.length);
+  const signature=JSON.stringify([marketplaceSide,state.running,listings.map(({island,index,offers})=>[
+    index,island.owner,offers,offers.map(offer=>selling?(canBuyListing(offer,island,buyer)?null:sellerListingBlock(offer,island,buyer)):
+      buyRequestBlock(offer,buyer))
+  ]),state.ships.map(ship=>[ship.portOrder?.offerId,ship.mission?.marketOrder])]);
   if(signature!==extraSignature){
     extraSignature=signature;
     const offers=el('market-list');
     offers.replaceChildren();
-    if(!listings.length)text(offers,'Şu anda açık satış ilanı yok.');
-    for(const {island,index} of listings){
+    text(offers,selling?'Satış ilanları':'Alım ilanları','h3');
+    if(!listings.length)text(offers,selling?'Açık satış ilanı yok.':'Açık alım ilanı yok.');
+    for(const entry of listings){
+      const {island,index}=entry;
       text(offers,island.owner+' · '+island.name,'h4');
-      for(const offer of Object.values(island.listings))listingCard(offers,offer,island,index,buyer);
+      for(const offer of entry.offers){
+        if(selling)listingCard(offers,offer,island,index,buyer);
+        else buyRequestCard(offers,offer,index,own(entry),buyer);
+      }
+    }
+    const tracking=el('market-tracking');
+    tracking.replaceChildren();
+    voyageCards(tracking);
+    for(const [index,ship] of state.ships.entries()){
+      if(!ship.mission?.marketOrder||(ship.owner!==state.you&&state.islands[ship.to].controller!==state.you))continue;
+      const card=document.createElement('section');
+      card.className='market-offer';
+      card.dataset.marketMission=index;
+      text(card,state.islands[ship.to].name+' · '+ship.mission.amount+' '+names[ship.mission.good],'strong');
+      text(card,'').className='mission-status';
+      tracking.append(card);
     }
   }
+  for(const card of content.querySelectorAll('[data-market-mission]')){
+    const ship=state.ships[Number(card.dataset.marketMission)];
+    card.querySelector('.mission-status').textContent=ship.status;
+  }
   updateVoyages();
+}
+
+function buyRequestBlock(offer,seller){
+  if(!state.running)return 'Dünya duraklatıldı.';
+  if(!seller.plots.some(building=>building.kind==='liman'))return 'Kendi adana bir liman kur.';
+  if(seller.stock[offer.good]<offer.quantity)return 'Depodaki ürün yetersiz.';
+  return hasMarketShip(offer.quantity)?null:'Yüke uygun boş ve durdurulmuş bir gemi gerekli.';
+}
+
+function buyRequestCard(container,offer,index,own,seller){
+  const card=document.createElement('section');
+  card.className='market-offer';
+  const heading=document.createElement('div');
+  heading.className='market-offer-heading';
+  heading.append(productChip(offer.good,offer.quantity+' '+names[offer.good]));
+  text(heading,offer.gold+' altın','strong').className='gold-price';
+  card.append(heading);
+  if(own){
+    button(card,'İlanı kaldır',()=>send({type:'removeBuyListing',island:index,good:offer.good})).disabled=!state.running;
+  }else{
+    const reason=buyRequestBlock(offer,seller);
+    const sell=button(card,'Sat ve gemiyi gönder',()=>send({type:'fillBuyListing',target:index,id:offer.id}));
+    sell.disabled=!!reason;
+    if(reason)text(card,reason);
+  }
+  container.append(card);
 }
 
 function sellerListingBlock(offer,seller,buyer){
@@ -890,11 +1058,11 @@ function stockRequirement(parent,good,amount,id){
   parent.append(row);
 }
 
-function updateRequirement(id,value,amount){
+function updateRequirement(id,value,amount,fill=value){
   const count=el(id+'-count'), meter=el(id+'-bar');
   if(!count||!meter)return;
   count.textContent=value+' / '+amount+(value>=amount?' ✓':'');
-  meter.value=Math.min(value,amount);
+  meter.value=Math.min(fill,amount);
 }
 
 function facilityIssue(island,building){
@@ -928,7 +1096,11 @@ function facilityPanel(container,island,building){
   details.className='visual-details';
   text(details,'Üretim ve teslimat ayrıntıları','summary');
   text(details,'').id='facility-reason';
-  text(details,'').id='facility-output';
+  const output=document.createElement('div');
+  output.className='facility-output';
+  output.append(productChip(good));
+  text(output,'','strong').id='facility-output';
+  container.append(output);
   text(details,'').id='facility-rate';
   container.append(details);
   const management=document.createElement('details');
@@ -968,7 +1140,7 @@ function updateFacility(island,building){
   if(issue?.symbol==='!')reason=issue.label+'.';
   el('facility-reason').textContent=reason;
   const output=building.output?.[good]||0;
-  el('facility-output').textContent='Tesiste bekleyen '+names[good].toLocaleLowerCase('tr-TR')+' · '+output+(building.kind==='koyun'?' · Taşıma partisi 10':'');
+  el('facility-output').textContent=output+' adet tesiste bekliyor';
   el('facility-rate').textContent='Son dakikada üretilen · '+(building.actual||0);
 }
 
@@ -1062,7 +1234,7 @@ function updateVoyages(){
   for(const tracker of el('content').querySelectorAll('[data-voyage]')){
     const ship=state.ships[Number(tracker.dataset.voyage)];
     if(!ship?.portOrder)continue;
-    const travelTime=state.islands[ship.from].tech.includes('logistics')?20:30;
+    const travelTime=voyageSeconds(state.islands[ship.from]);
     const fraction=Math.min(1,ship.progress/travelTime);
     const stage=ship.portOrder.delivered?'done':ship.stage;
     const location={out:.5*fraction,dock:.5,return:.5+.5*fraction,home:1,done:1}[stage]??0;
@@ -1108,7 +1280,7 @@ function drawWorld(layout){
     const from=islandCenters[ship.stage==='return'?ship.to:ship.from];
     const to=islandCenters[ship.stage==='return'?ship.from:ship.to];
     if(!from||!to)continue;
-    const travelTime=state.islands[ship.from].tech.includes('logistics')?20:30;
+    const travelTime=voyageSeconds(state.islands[ship.from]);
     const progress=ship.stage==='home'?0:ship.stage==='dock'?1:Math.min(1,ship.progress/travelTime);
     boat(from[0]+(to[0]-from[0])*progress,from[1]+(to[1]-from[1])*progress+20);
   }

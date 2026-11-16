@@ -132,6 +132,9 @@ test('Advanced technologies enforce university tier before charging research poi
   assert.throws(()=>act(world,player,research),/Üniversite seviye 2/);
   assert.equal(island.rp,100);
   island.universityLevel=2;
+  assert.throws(()=>act(world,player,research),/Şehir seviyesi 3/);
+  assert.equal(island.rp,100);
+  island.cityLevel=2;
   act(world,player,research);
   assert.equal(island.research.id,'combustion');
   assert.equal(island.rp,40);

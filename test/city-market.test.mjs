@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {migrate,act,tick,cityTier,shipTick,capacity,transportStats,technologies,productionSources} from '../src/logic.mjs';
+import {migrate,act,tick,cityTier,cityTiers,recipes,shipTick,capacity,transportStats,technologies,productionSources} from '../src/logic.mjs';
 
 function setup(){
   const world=migrate();
@@ -120,4 +120,68 @@ test('Updating a listing retains its reserved stock and cancelling returns the l
   act(world,players[1],{type:'removeListing',good:'wood'});
   assert.equal(seller.stock.wood,wood);
   assert.equal(seller.listings.wood,undefined);
+});
+
+test('A buy request escrows gold, survives reload, and pays the seller only on delivery',()=>{
+  let {world,buyer,seller,players}=setup();
+  const sellerPort=seller.plots.find(plot=>plot.kind==='liman');
+  act(world,players[1],{type:'ship',x:sellerPort.x,y:sellerPort.y});
+  const buyerGold=buyer.money,sellerGold=seller.money;
+  act(world,players[0],{type:'setBuyListing',good:'wood',quantity:10,gold:45});
+  assert.equal(buyer.money,buyerGold-45);
+  act(world,players[0],{type:'setBuyListing',good:'wood',quantity:10,gold:50});
+  assert.equal(buyer.money,buyerGold-50);
+  act(world,players[0],{type:'removeBuyListing',good:'wood'});
+  assert.equal(buyer.money,buyerGold);
+  act(world,players[0],{type:'setBuyListing',good:'wood',quantity:10,gold:45});
+  const fill={type:'fillBuyListing',target:0,id:buyer.buyListings.wood.id};
+  act(world,players[1],fill);
+  assert.throws(()=>act(world,players[1],fill),/değişti veya karşılandı/);
+  world=migrate(structuredClone(world));
+  const ship=world.ships[1];
+  [buyer,seller]=world.islands;
+  for(let step=0;step<30;step++)shipTick(world,ship);
+  assert.equal(seller.money,sellerGold);
+  assert.equal(ship.stage,'dock');
+  buyer.stock.wood=capacity(buyer);
+  shipTick(world,ship);
+  assert.equal(ship.load.wood,10);
+  assert.equal(seller.money,sellerGold);
+  buyer.stock.wood-=10;
+  shipTick(world,ship);
+  assert.equal(ship.load.wood,0);
+  assert.equal(seller.money,sellerGold+45);
+  assert.equal(buyer.money,buyerGold-45);
+  shipTick(world,ship);
+  assert.equal(seller.money,sellerGold+45);
+});
+
+test('All ten city tiers can unlock the preceding technologies and goods without a dependency cycle',()=>{
+  const traceTechnology=(id,visited)=>{
+    if(visited.has(id))return false;
+    const tech=technologies[id];
+    if(!tech)return false;
+    const next=new Set([...visited,id]);
+    return tech.requires.every(key=>traceTechnology(key,next));
+  };
+  for(const id of Object.keys(technologies))assert.ok(traceTechnology(id,new Set()),id);
+  const researched=new Set();
+  const producible=new Set(['tin','silver']);
+  for(let index=0;index<cityTiers.length;index++){
+    for(let n=0;n<Object.keys(technologies).length;n++){
+      for(const [id,tech] of Object.entries(technologies)){
+        if(tech.cityLevel<=index&&tech.requires.every(id=>researched.has(id))&&
+            Object.keys(tech.cost).every(good=>producible.has(good)))researched.add(id);
+      }
+      for(const [kind,recipe] of Object.entries(recipes)){
+        if(recipe.out&&(!recipe.tech||researched.has(recipe.tech))&&
+            Object.keys(recipe.inputs||(recipe.input?{[recipe.input]:1}:{})).every(good=>producible.has(good)))
+          producible.add(recipe.out);
+      }
+    }
+    for(const good of Object.keys(cityTiers[index+1]?.cost||{}))
+      assert.ok(producible.has(good),cityTiers[index+1].name+' · '+good);
+  }
+  assert.equal(cityTiers.length,10);
+  assert.equal(researched.size,80);
 });
