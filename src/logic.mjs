@@ -20,11 +20,11 @@ export function cycleLength(b){return Math.max(2,Math.ceil((b.path?Math.max(1,b.
 export function pay(a,cost){for(let [g,n] of Object.entries(cost))if((a.stock[g]||0)<n)throw Error('Yetersiz malzeme');for(let [g,n] of Object.entries(cost))a.stock[g]-=n;}
 export function validBuild(a,kind,x,y,i=0){if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>35||y>35)throw Error('Ada üzerinde bir kare seç.');const size=kind==='koyun'?2:1;for(let dx=0;dx<size;dx++)for(let dy=0;dy<size;dy++){let tx=x+dx,ty=y+dy;if(tx>35||ty>35)throw Error('Çiftlik için 2×2 boş kare gerekli.');if(tx===26&&ty===26)throw Error('Bu kare ada deposuna ayrılmış');if(occupied(a,tx,ty))throw Error('Bu alan dolu.');const t=terrain(tx,ty,i,a);if(kind==='balik'){if(['sea','lake','mountain','city'].includes(t)||!nearWater(a,i,tx,ty))throw Error('Balıkçı deniz veya tatlı su kıyısında olmalı');}else if(kind==='liman'){if(t!=='coast')throw Error('Limanı kıyıya kur.');}else if(['sea','lake','mountain','city','coast'].includes(t))throw Error('Bu arazi inşaata uygun değil.');}}
 export const goods=['wood','stone','food','wool','yarn','clothes','iron','copper','coal','steel','machines','tools'];
-export const recipes={demirci:{out:'tools',inputs:{iron:2,wood:1},tech:'mining'},komur:{out:'coal',tech:'mining'},celik:{out:'steel',inputs:{iron:2,coal:1},tech:'steel'},makine:{out:'machines',inputs:{steel:2,copper:1},tech:'machinery'},liman:{},oduncu:{out:'wood'},tas:{out:'stone'},balik:{out:'food'},koyun:{out:'wool'},iplik:{out:'yarn',input:'wool'},terzi:{out:'clothes',input:'yarn'},demir:{out:'iron'},bakir:{out:'copper'}};
+export const recipes={demirci:{out:'tools',inputs:{iron:2,wood:1},tech:'mining'},komur:{out:'coal',tech:'mining'},celik:{out:'steel',inputs:{iron:2,coal:1},tech:'steel'},makine:{out:'machines',inputs:{steel:3,copper:2},tech:'machinery'},liman:{},oduncu:{out:'wood'},tas:{out:'stone'},balik:{out:'food'},koyun:{out:'wool'},iplik:{out:'yarn',input:'wool'},terzi:{out:'clothes',inputs:{yarn:2}},demir:{out:'iron'},bakir:{out:'copper'}};
 export const basePrices={wood:3,stone:4,food:4,wool:5,yarn:8,clothes:14,iron:9,copper:10,coal:7,steel:24,machines:65,tools:22};
 export function price(a,g,buy=false){return Math.max(1,Math.round(basePrices[g]*(1.3-Math.min(1,(a.stock[g]||0)/200)*.5)*(buy?1.1:.9)))}
 const zero=()=>Object.fromEntries(goods.map(g=>[g,0]));
-export function order(a){let n=a.ordersDone||0;return {goods:n%3===0?{food:30,clothes:10}:n%3===1?{clothes:6}:a.tech.includes('mining')?{tools:8,food:20}:{wood:25,stone:15},reward:n%3===0?120:n%3===1?160:170,remaining:600}}
+export function order(a){let n=(a.ordersDone||0)+(a.orderChoice||0);return {goods:n%3===0?{food:30,clothes:10}:n%3===1?{clothes:6}:a.tech.includes('mining')?{tools:8,food:20}:{wood:25,stone:15},reward:n%3===0?120:n%3===1?160:170,remaining:600}}
 function migrateBase(old){let s=old||{tick:0,players:[],ships:[],islands:['Mercan','Defne','Sedef','Poyraz','Zümrüt','Kum','Çınar','Lale','Mavi','Gümüş'].map((name,i)=>({name,resource:i%2?'copper':'iron',stock:{...zero(),wood:60,stone:60,food:40},plots:[],buildings:[],owner:null}))};let upgrade=s.version!==6;s.islands.forEach((a,i)=>{a.plots ||= (a.buildings||[]).map((kind,j)=>({kind,x:2+j%9,y:2+Math.floor(j/9),size:1}));a.storageLevel ||=0;a.productionLevel ||=0;a.tech ||= [];a.stock={...zero(),...a.stock};a.money ??=400;a.ordersDone ||=0;a.order ||=order(a);a.market ??=false;a.citySupply ??={food:0,clothes:0};a.terrainOverrides ||= {};a.fertility=fertility(i);for(let b of a.plots){b.size ||=b.kind==='koyun'?2:1;b.phase ||=0;b.fertility=a.fertility;if(upgrade){for(let dx=-1;dx<=b.size;dx++)for(let dy=-1;dy<=b.size;dy++){let x=b.x+dx,y=b.y+dy;if(x>=0&&x<36&&y>=0&&y<36&&['sea','lake','mountain','city','coast'].includes(terrain(x,y,i)))a.terrainOverrides[x+','+y]='grass';}if(b.kind==='liman')a.terrainOverrides[b.x+','+b.y]='coast';}b.path=workPath(b,i,a);}});s.trader ||= {name:'Gezgin tüccar',stock:Object.fromEntries(goods.map(g=>[g,200])),money:10000};s.contracts ||= [];s.nextId ||=1;for(let sh of s.ships){if(!sh.load){sh.load=zero();if(sh.cargo>0&&goods.includes(sh.cargoGood||sh.good))sh.load[sh.cargoGood||sh.good]=sh.cargo;sh.stage=sh.back?'return':sh.progress>0?'out':'home';sh.enabled=false;}sh.stage ||= 'home';sh.amount ??=10;sh.buyAmount ??=10;sh.buy ||=s.islands[sh.from].resource==='iron'?'copper':'iron';sh.good ||= 'wood';sh.minStock ??=20;sh.minSell ??=0;sh.maxBuy ??=999;sh.status ||= 'Limanda';sh.progress ||=0;sh.capacity ||=20;for(const good of goods)sh.load[good] ??=0;}s.version=6;return s}
 export function loadCount(sh){return Object.values(sh.load).reduce((a,b)=>a+b,0)}
 function port(a){return a.plots.some(b=>b.kind==='liman')}
@@ -61,12 +61,19 @@ function gainXP(world,islandIndex,activity){
 }
 
 function actBase(s,p,m){let a=s.islands[p.island];
- if(m.type==='build'){let r=recipes[m.kind];if(!r)throw Error('Bilinmeyen bina');if(r.tech&&!a.tech.includes(r.tech))throw Error('Önce teknolojiyi araştır');if(['demir','bakir'].includes(m.kind)&&r.out!==a.resource)throw Error('Bu adada bu maden yok');validBuild(a,m.kind,m.x,m.y,p.island);pay(a,{wood:10,stone:5});let b={kind:m.kind,x:m.x,y:m.y,size:m.kind==='koyun'?2:1,phase:0,fertility:a.fertility};b.path=workPath(b,p.island,a);a.plots.push(b);return;}
- if(m.type==='move'||m.type==='demolish'){let b=a.plots.find(b=>b.x===m.fromX&&b.y===m.fromY);if(!b)throw Error('Bina bulunamadı');if(b.kind==='liman'&&a.plots.filter(b=>b.kind==='liman').length===1&&(s.ships.some(sh=>sh.from===p.island||sh.to===p.island||sh.barterRoute===p.island)||s.contracts.some(c=>c.status==='queued'&&(c.from===p.island||c.to===p.island))))throw Error('Filo veya bekleyen takas bu limanı kullanıyor. Önce ikinci bir liman kur');if(m.type==='move'){let other={...a,plots:a.plots.filter(q=>q!==b)};validBuild(other,b.kind,m.x,m.y,p.island);b.x=m.x;b.y=m.y;b.path=workPath(b,p.island,a);b.phase=0;}else{if(a.stock.wood+5>capacity(a)||a.stock.stone+2>capacity(a))throw Error('İade için depoda 5 odun ve 2 taş yeri aç');a.stock.wood+=5;a.stock.stone+=2;a.plots=a.plots.filter(q=>q!==b);}return;}
+ if(m.type==='build'){let r=recipes[m.kind];if(!r)throw Error('Bilinmeyen bina');if(r.tech&&!a.tech.includes(r.tech))throw Error('Önce teknolojiyi araştır');if(m.kind==='bakir'&&a.resource!=='copper')throw Error('Bu adada bu maden yok');validBuild(a,m.kind,m.x,m.y,p.island);const builtCost=buildingCost(m.kind);pay(a,builtCost);let b={builtCost,kind:m.kind,x:m.x,y:m.y,size:m.kind==='koyun'?2:1,phase:0,fertility:a.fertility};b.path=workPath(b,p.island,a);a.plots.push(b);return;}
+ if(m.type==='move'||m.type==='demolish'){let b=a.plots.find(b=>b.x===m.fromX&&b.y===m.fromY);if(!b)throw Error('Bina bulunamadı');if(b.kind==='liman'&&a.plots.filter(b=>b.kind==='liman').length===1&&(s.ships.some(sh=>sh.from===p.island||sh.to===p.island||sh.barterRoute===p.island)||s.contracts.some(c=>c.status==='queued'&&(c.from===p.island||c.to===p.island))))throw Error('Filo veya bekleyen takas bu limanı kullanıyor. Önce ikinci bir liman kur');if(m.type==='move'){let other={...a,plots:a.plots.filter(q=>q!==b)};validBuild(other,b.kind,m.x,m.y,p.island);b.x=m.x;b.y=m.y;b.path=workPath(b,p.island,a);b.phase=0;}else{for(const [good,amount] of Object.entries(demolitionRefund(b)))a.stock[good]+=amount;a.plots=a.plots.filter(q=>q!==b);}return;}
  if(m.type==='storageUpgrade'){if(a.storageLevel>=10)throw Error('En yüksek depo seviyesi');pay(a,upgradeCost(a.storageLevel));a.storageLevel++;return;}
  if(m.type==='productionUpgrade'){if(a.productionLevel>=5)throw Error('En yüksek üretim seviyesi');pay(a,upgradeCost(a.productionLevel+1));a.productionLevel++;return;}
  if(m.type==='research'){let t=technologies[m.id];if(!t||a.research||a.rp<(t.rp||0)||a.tech.includes(m.id)||!t.requires.every(k=>a.tech.includes(k)))throw Error('Araştırma koşulları karşılanmıyor');if((a.universityLevel||0)<(t.university||0))throw Error('Üniversite seviye '+t.university+' gerekli');if(a.cityLevel<t.cityLevel)throw Error('Şehir seviyesi '+(t.cityLevel+1)+' gerekli');pay(a,t.cost);a.research={id:m.id,remaining:t.time||90};a.rp-=t.rp||0;return;}
- if(m.type==='deliverOrder'){pay(a,a.order.goods);a.money+=cityOrderReward(a);a.rp+=10;a.ordersDone++;a.order=order(a);gainXP(s,p.island,'cityOrder');return;}
+ if(m.type==='deliverOrder'){pay(a,cityOrderGoods(a));a.money+=cityOrderReward(a);a.rp+=10;a.ordersDone++;a.order=order(a);gainXP(s,p.island,'cityOrder');return;}
+ if(m.type==='refreshCityOrder'){
+   if(s.tick<(a.cityOrderRefreshAt??180))throw Error('Sipariş değişikliği için süreyi bekle');
+   a.orderChoice=(a.orderChoice||0)+1;
+   a.order=order(a);
+   a.cityOrderRefreshAt=s.tick+180;
+   return;
+ }
  if(m.type==='market'){a.market=!!m.enabled;return;}
  if(m.type==='trader'){if(s.mode!=='test')throw Error('Gezgin tüccar yalnızca test modunda');let g=m.good,n=integer(m.amount,100);if(!goods.includes(g)||n<1)throw Error('Ürün ve miktar seç');let t=s.trader,u=price(t,g,!!m.buy);if(m.buy){if(t.stock[g]<n||a.money<u*n||a.stock[g]+n>capacity(a))throw Error('Stok, para veya depo kapasitesi yetersiz');t.stock[g]-=n;a.stock[g]+=n;a.money-=u*n;t.money+=u*n;}else{if(a.stock[g]<n||t.money<u*n)throw Error('Stok veya tüccarın parası yetersiz');a.stock[g]-=n;t.stock[g]+=n;a.money+=u*n;t.money-=u*n;}return;}
  if(m.type==='ship'){if(!a.plots.some(b=>b.kind==='liman'&&b.x===m.x&&b.y===m.y))throw Error('Limanı seç');pay(a,{wood:30,stone:10});s.ships.push({owner:p.island,from:p.island,to:1-p.island,good:'wood',buy:a.resource==='iron'?'copper':'iron',amount:10,buyAmount:10,minStock:20,minSell:0,maxBuy:999,load:zero(),stage:'home',progress:0,back:false,capacity:20,enabled:false,status:'Rota bekliyor'});return;}
@@ -175,7 +182,7 @@ function owning(s,p,i){return i===p.island||s.islands[i]?.controller===p.island}
 function actDepth(s,p,m){let i=Number.isInteger(m.island)?m.island:p.island,a=s.islands[i],home=s.islands[p.island];if(m.type==='colonize'){if(!a||a.owner||i<2)throw Error('Boş bir ada seç');if(!home.tech.includes('navigation'))throw Error('Denizcilik araştırması gerekli');let sh=s.ships.find(sh=>sh.owner===p.island&&sh.stage==='home'&&!sh.enabled&&!sh.contract&&!loadCount(sh));if(!sh||!port(home))throw Error('Ana limanda boş ve durdurulmuş gemi gerekli');if(home.money<200)throw Error('200 altın gerekli');pay(home,{wood:60,stone:40,tools:10});home.money-=200;sh.expedition={to:i,remaining:45};sh.stage='expedition';sh.status='Koloni seferi';return;}
 if(!owning(s,p,i))throw Error('Bu ada sana ait değil');if(m.type==='road'){if(!Number.isInteger(m.x)||!Number.isInteger(m.y)||!['grass','forest','rock'].includes(terrain(m.x,m.y,i,a))||occupied(a,m.x,m.y))throw Error('Yola uygun boş kara seç');let k=m.x+','+m.y;if(a.roads.includes(k))throw Error('Yol zaten var');pay(a,{stone:1});a.roads.push(k);return;}
 if(m.type==='buildingUpgrade'){let b=a.plots.find(b=>b.x===m.x&&b.y===m.y);if(!b||!recipes[b.kind]?.out||b.level>=5)throw Error('Yükseltilebilir üretim binası seç (en fazla 5)');pay(a,upgradeBuildingCost(b));b.level=(b.level||1)+1;return;}
-if(i!==p.island&&['research','deliverOrder','offer','reply','trader'].includes(m.type))throw Error('Bu işlemi ana adadan yap');if(i!==p.island&&['ship','route'].includes(m.type))throw Error('Gemiler ana limandan yönetilir');let ownTech=a.tech;a.tech=home.tech;try{actBase(s,{...p,island:i},m)}finally{if(i!==p.island)a.tech=ownTech;}}
+if(i!==p.island&&['research','deliverOrder','refreshCityOrder','offer','reply','trader'].includes(m.type))throw Error('Bu işlemi ana adadan yap');if(i!==p.island&&['ship','route'].includes(m.type))throw Error('Gemiler ana limandan yönetilir');let ownTech=a.tech;a.tech=home.tech;try{actBase(s,{...p,island:i},m)}finally{if(i!==p.island)a.tech=ownTech;}}
 function tickDepth(s){for(let a of s.islands){let home=s.islands[a.controller]||a;for(let b of a.plots){let road=b.path?.length?b.path.filter(p=>a.roads.includes(p.join(','))).length/b.path.length:0;b.roadFactor=1-road*.4;if(b.kind==='koyun')b.roadFactor*=home.tech.includes('husbandry')?.5:home.tech.includes('farming')?.75:1;}if(a.research&&--a.research.remaining<=0){a.tech.push(a.research.id);a.research=null;gainXP(s,s.islands.indexOf(a),'research');}}
 let expeditions=s.ships.filter(sh=>sh.expedition);for(let sh of expeditions){sh.status='Koloni seferi · '+sh.expedition.remaining+' sn';if(--sh.expedition.remaining<=0){let a=s.islands[sh.expedition.to];if(!a.owner){a.owner=s.islands[sh.owner].owner+' · Koloni';a.controller=sh.owner;a.market=false;a.stock={...a.stock,wood:40,stone:30,food:20};let found=false;for(let y=0;y<36&&!found;y++)for(let x=0;x<36&&!found;x++)if(terrain(x,y,sh.expedition.to,a)==='coast'){a.plots.push({kind:'liman',x,y,size:1,level:1,phase:0});found=true;}}else{let h=s.islands[sh.owner];for(let [g,n] of Object.entries({wood:60,stone:40,tools:10}))h.stock[g]+=n;h.money+=200;}delete sh.expedition;sh.stage='home';}}
 let saved=s.ships;s.ships=saved.filter(sh=>!sh.expedition);tickBase(s);s.ships=saved;
@@ -275,7 +282,7 @@ function migratePrevious(old){let s=migrateDepth(old);s.nextBuildingId ||=1;s.is
 export function tick(s){s.nextBuildingId ||=1;for(let [i,a] of s.islands.entries()){initializeMechanics(s,a,i);economyInit(s,a,i);syncLocations(a);advanceDeliveries(s,a,i);dispatchDeliveries(s,a,i);if(a.owner&&s.tick%180===0){a.needs={food:20,clothes:10,tools:8};if(a.ai)seedMarket(s,a);}if(a.ai&&s.tick%30===0)expandAI(a,i);
 }tickDepth(s);for(let sh of s.ships){let a=s.islands[sh.owner];if(a)sh.capacity=seaCapacity(a);}for(let a of s.islands){syncLocations(a);for(let b of a.plots){if(b.kind==='balik'&&!nearWater(a,s.islands.indexOf(a),b.x,b.y))b.status='Balıkçı su kenarında olmalı';else if(Object.values(b.output||{}).some(n=>n>=50))b.status='Tesis çıkışı dolu · At bekleniyor';b.recent=(b.recent||[]).filter(e=>s.tick-e.tick<60);b.actual=b.recent.reduce((n,e)=>n+e.amount,0);if(b.worker){b.status=stageLabel(b.worker.stage);let walk=(b.path||[]).slice(1).reduce((n,p)=>n+(a.roads.includes(p.join(','))?.5:1),0);b.rate=60*(1+a.productionLevel)/Math.max(1,walk*2+Math.ceil(4/(1+.25*((b.level||1)-1)))+1);}}}}
 
-function actPrevious(s,p,m){let a=s.islands[Number.isInteger(m.island)?m.island:p.island],b=m.type==='demolish'&&a?.plots.find(b=>b.x===m.fromX&&b.y===m.fromY),inv=b?{...b.inventory}:{};if(b)for(let [g,n] of Object.entries(inv))if(a.stock[g]+n+(g==='wood'?5:g==='stone'?2:0)>capacity(a))throw Error('Tesisin hammaddelerini iade etmek için depoda yer aç');actDepth(s,p,m);if(b)for(let [g,n] of Object.entries(inv))a.stock[g]+=n;}
+function actPrevious(s,p,m){let a=s.islands[Number.isInteger(m.island)?m.island:p.island],b=m.type==='demolish'&&a?.plots.find(b=>b.x===m.fromX&&b.y===m.fromY),inv=b?{...b.inventory}:{};if(b)for(let [g,n] of Object.entries(inv))if(a.stock[g]+n+(demolitionRefund(b)[g]||0)>capacity(a))throw Error('Tesisin hammaddelerini iade etmek için depoda yer aç');actDepth(s,p,m);if(b)for(let [g,n] of Object.entries(inv))a.stock[g]+=n;}
 const pathSteps=[[1,0],[-1,0],[0,1],[0,-1]];
 
 export function weightedPath(island,index,from,goal,allow=[]){
@@ -337,17 +344,126 @@ function travel(entity,a,speed=1){if(!entity.path?.length)return false;let left=
 function routeWorker(a,i,b,w,back=false){let [x,y]=position(w),from={x,y},path=back?weightedPath(a,i,from,(x,y)=>x===b.x&&y===b.y,[b]):weightedPath(a,i,from,(x,y)=>resourceTarget(b.kind,terrain(x,y,i,a))&&!occupied(a,x,y),[b]);w.x=x;w.y=y;w.path=path;w.progress=0;w.stage=path.length?(back?'back':'out'):'blocked';}
 function produced(s,a,b,n){let out=b.extract||recipes[b.kind].out;b.output[out]=(b.output[out]||0)+n;b.recent.push({tick:s.tick,amount:n});}
 function productionTick(s,a,i){const home=s.islands[a.controller]||a;for(let b of a.plots){b.inventory ||= {};b.output ||= {};b.recent ||= [];let baseRecipe=recipes[b.kind],r=baseRecipe&&{...baseRecipe,out:b.extract||baseRecipe.out};if(!r?.out)continue;if(b.kind==='balik'&&!nearWater(a,i,b.x,b.y)){b.status='Balıkçı su kenarında olmalı';continue;}let n=1+a.productionLevel,raw=!!resourceTarget(b.kind,'forest')||['tas','demir','bakir','komur'].includes(b.kind);if(raw){let w=b.worker;if(!w){b.path=workPath(b,i,a);w=b.worker={stage:b.path?.length?'out':'blocked',path:b.path||[],progress:0,elapsed:0,carried:0,x:b.x,y:b.y};}if(w.stage==='blocked'){routeWorker(a,i,b,w,!!w.carried);continue;}if(w.stage==='out'){let last=w.path.at(-1);if(!last||!resourceTarget(b.kind,terrain(...last,i,a))){routeWorker(a,i,b,w);continue;}if(travel(w,a)){w.stage='work';w.elapsed=0;}}else if(w.stage==='work'){let last=w.path.at(-1);if(!last||!resourceTarget(b.kind,terrain(...last,i,a))){routeWorker(a,i,b,w);continue;}if(++w.elapsed>=Math.max(1,4/(1+.25*((b.level||1)-1)))){w.carried=n;routeWorker(a,i,b,w,true);}}else if(w.stage==='back'){if(travel(w,a)){w.stage='deliver';w.elapsed=0;}}else if(w.stage==='deliver'){if((b.output[r.out]||0)+w.carried>50)continue;produced(s,a,b,w.carried);w.carried=0;b.path=workPath(b,i,a);w.path=b.path||[];w.progress=0;w.stage=w.path.length?'out':'blocked';}b.phase=0;continue;}
-let inp=inputsOf(b);if((b.output[r.out]||0)+n>50){b.status='Tesis çıkışı dolu · At bekleniyor';continue;}if(!Object.entries(inp).every(([g,q])=>(b.inventory[g]||0)>=q*n)){b.status='Atlı teslimat bekleniyor';continue;}let boost=b.kind==='balik'?(a.tech.includes('aquaculture')?1.4:a.tech.includes('nets')?1.25:a.tech.includes('fishing')?1.15:1):b.kind==='koyun'?(a.tech.includes('ranching')?1.3:a.tech.includes('breeding')?1.15:1):(a.tech.includes('industry')?1.35:a.tech.includes('engineering')?1.2:a.tech.includes('craft')?1.1:1);if(a.tech.includes('agronomy'))boost*=1.3;else if(a.tech.includes('irrigation'))boost*=1.15;const branch=b.kind==='balik'?'Balıkçılık':b.kind==='koyun'?'Hayvancılık':
-  ['demirci','celik','bronz','gumusisleme','profilAtolyesi','parcaAtolyesi'].includes(b.kind)?'Metalürji':'Üretim';
-boost*=1+.07*advancedLevels(home,branch)+(b.kind==='koyun'?.04*advancedLevels(home,'Tarım'):0);
-b.phase=(b.phase||0)+boost;if(b.phase<cycleLength(b))continue;b.phase=0;for(let [g,q] of Object.entries(inp))b.inventory[g]-=q*n;produced(s,a,b,n);}}
+let inp=inputsOf(b);if((b.output[r.out]||0)+n>50){b.status='Tesis çıkışı dolu · At bekleniyor';continue;}if(!Object.entries(inp).every(([g,q])=>(b.inventory[g]||0)>=q*n)){b.status='Atlı teslimat bekleniyor';continue;}const boost=productionSpeed(home,b);b.phase=(b.phase||0)+boost;if(b.phase<cycleLength(b))continue;b.phase=0;for(let [g,q] of Object.entries(inp))b.inventory[g]-=q*n;produced(s,a,b,n);}}
+function productionSpeed(home,building){
+  const tech=home.tech;
+  const kind=building.kind;
+  let speed=kind==='balik'?(tech.includes('aquaculture')?1.4:tech.includes('nets')?1.25:tech.includes('fishing')?1.15:1):
+    kind==='koyun'?(tech.includes('ranching')?1.3:tech.includes('breeding')?1.15:1):
+      tech.includes('industry')?1.35:tech.includes('engineering')?1.2:tech.includes('craft')?1.1:1;
+  if(tech.includes('agronomy'))speed*=1.3;
+  else if(tech.includes('irrigation'))speed*=1.15;
+  const branch=kind==='balik'?'Balıkçılık':kind==='koyun'?'Hayvancılık':
+    ['demirci','celik','bronz','gumusisleme','profilAtolyesi','parcaAtolyesi'].includes(kind)?'Metalürji':'Üretim';
+  return speed*(1+.07*advancedLevels(home,branch)+(kind==='koyun'?.04*advancedLevels(home,'Tarım'):0));
+}
+
+export function productionPerSecond(island,building,home=island,level=building.level||1){
+  const output=1+island.productionLevel;
+  if(['oduncu','tas','demir','bakir','komur'].includes(building.kind)){
+    if(!building.path?.length)return 0;
+    const roads=new Set(island.roads||[]);
+    const travelTime=path=>Math.max(1,Math.ceil(path.slice(1).reduce((seconds,point)=>seconds+(roads.has(point.join(','))?.5:1),0)));
+    const work=Math.ceil(4/(1+.25*(level-1)));
+    return output/(travelTime(building.path)+travelTime([...building.path].reverse())+work+1);
+  }
+  return output/Math.ceil(cycleLength({...building,level})/productionSpeed(home,building));
+}
+
 export function nearWater(a,i,x,y){return [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy])=>['sea','lake'].includes(terrain(x+dx,y+dy,i,a)));}
 export function horsePrice(a){return 100+75*((a.horses?.length||1)-1);}
 function endpoint(a,id){return id==='depot'?{...a.depot,id:'depot'}:a.plots.find(b=>b.id===id);}
 function taskRoute(a,i,d,target){let [x,y]=position(d),source=endpoint(a,d.from);let path=weightedPath(a,i,{x,y},(x,y)=>x===target.x&&y===target.y,[source,target]);d.x=x;d.y=y;d.path=path;d.progress=0;d.blocked=!path.length;}
 const woolPickupSize=10;
 function dispatchDeliveries(s,a,i){a.horses ||= [{id:'h1',x:a.depot.x,y:a.depot.y}];let jobs=[];for(let b of a.plots){for(let [g,n] of Object.entries(b.output||{}))if(n>=(b.kind==='koyun'&&g==='wool'?woolPickupSize:1)&&!a.deliveries.some(d=>d.from===b.id&&d.good===g&&d.stage!=='return'))jobs.push({from:b.id,to:'depot',good:g,wanted:b.kind==='koyun'&&g==='wool'?woolPickupSize:fleetCapacity(s.islands[a.controller]||a),last:b.lastPickup||0});for(let [g,n] of Object.entries(inputsOf(b))){let wanted=(g==='wool'?Math.max(woolPickupSize,n*(1+a.productionLevel)*3):n*(1+a.productionLevel)*3)-(b.inventory[g]||0);if(wanted>0&&a.stock[g]>0&&!a.deliveries.some(d=>d.to===b.id&&d.good===g&&d.stage!=='return'))jobs.push({from:'depot',to:b.id,good:g,wanted,last:b.lastSupply||0});}}jobs.sort((u,v)=>u.last-v.last||u.from.localeCompare(v.from)||u.to.localeCompare(v.to));for(let horse of a.horses){if(a.deliveries.some(d=>d.horseId===horse.id))continue;let job=jobs.shift();if(!job)break;let source=endpoint(a,job.from);if(!source)continue;let from={x:horse.x??a.depot.x,y:horse.y??a.depot.y};let path=weightedPath(a,i,from,(x,y)=>x===source.x&&y===source.y,[source]);if(!path.length)continue;let d={...job,horseId:horse.id,path,progress:0,amount:0,stage:'empty',x:from.x,y:from.y};a.deliveries.push(d);let b=endpoint(a,job.from==='depot'?job.to:job.from);if(b){if(job.from==='depot')b.lastSupply=s.tick+1;else b.lastPickup=s.tick+1;}}}
-function advanceDeliveries(s,a,i){for(let d of a.deliveries){let horse=a.horses.find(h=>h.id===d.horseId);if(!horse){a.horses.push({id:d.horseId||'legacy'+a.horses.length});d.horseId=a.horses.at(-1).id;}let source=endpoint(a,d.from),target=endpoint(a,d.to);if(!target&&d.stage==='loaded'){d.to='depot';target=endpoint(a,'depot');taskRoute(a,i,d,target);}if(d.stage==='empty'&&!source){d.stage='return';taskRoute(a,i,d,a.depot);}let goal=d.stage==='empty'?source:d.stage==='return'?a.depot:target;if(!goal)continue;if(d.blocked||!d.path?.length){taskRoute(a,i,d,goal);continue;}if(!travel(d,a,transportStats(s.islands[a.controller]||a).speed))continue;let [x,y]=position(d);let h=a.horses.find(h=>h.id===d.horseId);h.x=x;h.y=y;if(d.stage==='empty'){let stock=d.from==='depot'?a.stock:source.output;let qty=Math.min(fleetCapacity(s.islands[a.controller]||a),d.wanted,stock[d.good]||0);stock[d.good]=(stock[d.good]||0)-qty;if(d.from==='depot')syncLocations(a);d.amount=qty;d.stage=qty?'loaded':'return';taskRoute(a,i,d,qty?target:a.depot);}else if(d.stage==='loaded'){if(d.to==='depot'){let qty=Math.min(d.amount,Math.max(0,capacity(a)-a.stock[d.good]));a.stock[d.good]+=qty;d.amount-=qty;if(d.amount)continue;syncLocations(a);}else{target.inventory ||= {};target.inventory[d.good]=(target.inventory[d.good]||0)+d.amount;d.amount=0;}d.stage='return';taskRoute(a,i,d,a.depot);}else{d.done=true;h.x=a.depot.x;h.y=a.depot.y;}}a.deliveries=a.deliveries.filter(d=>!d.done);}
+function collectNearby(world,island,index,delivery,source,space){
+  if(!space||delivery.extraPickup||delivery.to!=='depot'||delivery.from==='depot')return false;
+  const reserved=new Set(island.deliveries.filter(other=>other!==delivery&&other.stage==='empty'&&other.good===delivery.good)
+    .map(other=>other.from));
+  const nearby=island.plots.filter(building=>building!==source&&building.kind===source.kind&&
+    building.output[delivery.good]>0&&!reserved.has(building.id)&&
+    Math.abs(building.x-source.x)+Math.abs(building.y-source.y)<=8);
+  let closest,path;
+  for(const building of nearby){
+    const candidate=transportPath(island,index,source,building);
+    if(candidate.length&&(!path||candidate.length<path.length)){
+      closest=building;
+      path=candidate;
+    }
+  }
+  if(!closest)return false;
+  delivery.from=closest.id;
+  delivery.extraPickup=true;
+  delivery.wanted=space;
+  delivery.path=path;
+  delivery.progress=0;
+  delivery.blocked=false;
+  closest.lastPickup=world.tick+1;
+  return true;
+}
+
+function carryToDepot(island,index,delivery){
+  delivery.to='depot';
+  delivery.stage=delivery.amount?'loaded':'return';
+  taskRoute(island,index,delivery,island.depot);
+}
+
+function advanceDeliveries(world,island,index){
+  const home=world.islands[island.controller]||island;
+  const {capacity:limit,speed}=transportStats(home);
+  for(const delivery of island.deliveries){
+    let horse=island.horses.find(item=>item.id===delivery.horseId);
+    if(!horse){
+      horse={id:delivery.horseId||'legacy'+island.horses.length};
+      island.horses.push(horse);
+      delivery.horseId=horse.id;
+    }
+    const source=endpoint(island,delivery.from);
+    const target=endpoint(island,delivery.to);
+    if((delivery.stage==='loaded'&&!target)||(delivery.stage==='empty'&&!source)){
+      carryToDepot(island,index,delivery);
+      continue;
+    }
+    const goal=delivery.stage==='empty'?source:delivery.stage==='return'?island.depot:target;
+    if(!goal)continue;
+    if(delivery.blocked||!delivery.path?.length){
+      if(delivery.stage==='empty'&&delivery.extraPickup&&delivery.amount)carryToDepot(island,index,delivery);
+      else taskRoute(island,index,delivery,goal);
+      continue;
+    }
+    if(!travel(delivery,island,speed))continue;
+    [horse.x,horse.y]=position(delivery);
+    if(delivery.stage==='empty'){
+      const stock=delivery.from==='depot'?island.stock:source.output;
+      const quantity=Math.min(Math.max(0,limit-delivery.amount),delivery.wanted,stock[delivery.good]||0);
+      stock[delivery.good]=(stock[delivery.good]||0)-quantity;
+      if(delivery.from==='depot')syncLocations(island);
+      delivery.amount+=quantity;
+      if(collectNearby(world,island,index,delivery,source,limit-delivery.amount))continue;
+      delivery.stage=delivery.amount?'loaded':'return';
+      taskRoute(island,index,delivery,delivery.amount?target:island.depot);
+    }else if(delivery.stage==='loaded'){
+      if(delivery.to==='depot'){
+        const quantity=Math.min(delivery.amount,Math.max(0,capacity(island)-island.stock[delivery.good]));
+        island.stock[delivery.good]+=quantity;
+        delivery.amount-=quantity;
+        syncLocations(island);
+        if(delivery.amount)continue;
+      }else{
+        target.inventory ||= {};
+        target.inventory[delivery.good]=(target.inventory[delivery.good]||0)+delivery.amount;
+        delivery.amount=0;
+      }
+      delivery.stage='return';
+      taskRoute(island,index,delivery,island.depot);
+    }else{
+      delivery.done=true;
+      horse.x=island.depot.x;
+      horse.y=island.depot.y;
+    }
+  }
+  island.deliveries=island.deliveries.filter(delivery=>!delivery.done);
+}
 function reroute(a,i){for(let b of a.plots){b.path=workPath(b,i,a);if(b.worker)routeWorker(a,i,b,b.worker,!!b.worker.carried);}for(let d of a.deliveries){let target=d.stage==='empty'?endpoint(a,d.from):d.stage==='return'?a.depot:endpoint(a,d.to);if(!target){target=a.depot;d.stage=d.amount?'loaded':'return';d.to='depot';}taskRoute(a,i,d,target);}}
 function migrateMechanics11(old){let s=migratePrevious(old);s.mechanicsVersion=1;s.islands.forEach((a,i)=>{initializeMechanics(s,a,i);syncLocations(a);for(let b of a.plots)b.path=workPath(b,i,a);reroute(a,i);});return s;}
 function actMechanics11(s,p,m){let i=Number.isInteger(m.island)?m.island:p.island,a=s.islands[i];if(a)initializeMechanics(s,a,i);let removed=m.type==='demolish'&&a?.plots.find(b=>b.x===m.fromX&&b.y===m.fromY);if(removed?.worker?.carried){let g=recipes[removed.kind].out;if(a.stock[g]+removed.worker.carried>capacity(a))throw Error('Taşınan yükü depoya koymak için yer aç');}actPrevious(s,p,m);if(removed){for(let [g,n] of Object.entries(removed.output||{})){a.stock[g]=(a.stock[g]||0)+n;}if(removed.worker?.carried)a.stock[removed.extract||recipes[removed.kind].out]+=removed.worker.carried;}if(a){syncLocations(a);if(['build','move','demolish','road'].includes(m.type))reroute(a,i);}}
@@ -394,7 +510,7 @@ if(m.type==='setListing'||m.type==='removeListing'){manageListing(s,p,i,m);retur
 if(m.type==='buyListing'){buyListing(s,p,m);return;}
 if(m.type==='setBuyListing'||m.type==='removeBuyListing'){manageBuyListing(s,p,i,m);return;}
 if(m.type==='fillBuyListing'){fillBuyListing(s,p,m);return;}
-if(m.type==='demolish'){let b=a?.plots.find(b=>b.x===m.fromX&&b.y===m.fromY);if(b){if(b.kind==='liman'&&a.plots.filter(plot=>plot.kind==='liman').length===1&&(Object.keys(a.listings).length||Object.keys(a.buyListings||{}).length))throw Error('Son limanı yıkmadan önce pazar ilanlarını kaldır');let refund={wood:5,stone:2};for(let bag of [b.output,b.inventory])for(let [g,n] of Object.entries(bag||{}))refund[g]=(refund[g]||0)+n;if(b.worker?.carried){let g=b.extract||recipes[b.kind].out;refund[g]=(refund[g]||0)+b.worker.carried;}for(let [g,n] of Object.entries(refund))if((a.stock[g]||0)+n>capacity(a))throw Error('İade ürünleri için depoda yer aç');}}if(m.type==='buyHorse'){if(!owning(s,p,i))throw Error('Kendi adanı seç');if(a.horses.length>=20)throw Error('En fazla 20 at');let cost=horsePrice(a);if(a.money<cost)throw Error(cost+' altın gerekli');a.money-=cost;a.horses.push({id:'horse'+s.nextId++,x:a.depot.x,y:a.depot.y});return;}
+if(m.type==='demolish'){let b=a?.plots.find(b=>b.x===m.fromX&&b.y===m.fromY);if(b){if(b.kind==='liman'&&a.plots.filter(plot=>plot.kind==='liman').length===1&&(Object.keys(a.listings).length||Object.keys(a.buyListings||{}).length))throw Error('Son limanı yıkmadan önce pazar ilanlarını kaldır');let refund=demolitionRefund(b);for(let bag of [b.output,b.inventory])for(let [g,n] of Object.entries(bag||{}))refund[g]=(refund[g]||0)+n;if(b.worker?.carried){let g=b.extract||recipes[b.kind].out;refund[g]=(refund[g]||0)+b.worker.carried;}for(let [g,n] of Object.entries(refund))if((a.stock[g]||0)+n>capacity(a))throw Error('İade ürünleri için depoda yer aç');}}if(m.type==='buyHorse'){if(!owning(s,p,i))throw Error('Kendi adanı seç');if(a.horses.length>=20)throw Error('En fazla 20 at');let cost=horsePrice(a);if(a.money<cost)throw Error(cost+' altın gerekli');a.money-=cost;a.horses.push({id:'horse'+s.nextId++,x:a.depot.x,y:a.depot.y});return;}
 if(m.type==='extract'){if(!owning(s,p,i))throw Error('Kendi adanı seç');let b=a.plots.find(b=>b.x===m.x&&b.y===m.y),tech={...a,tech:home.tech};if(!b||!mineralChoices(tech,i,b).includes(m.good))throw Error('Teknoloji, maden seviyesi veya yerel kaynak uygun değil');if(b.worker?.carried)throw Error('İşçi yükünü teslim etsin');b.extract=m.good;delete b.worker;return;}
 if(m.type==='tradeMission'){let target=s.islands[m.target],g=m.good,n=m.amount;if(!target||target===home||!target.owner||!goods.includes(g)||!Number.isInteger(n)||n<1||n>20)throw Error('Geçersiz ticaret siparişi');if(!port(home)||!port(target))throw Error('İki adada liman gerekli');let sh=s.ships.find(sh=>sh.owner===p.island&&sh.stage==='home'&&!sh.enabled&&!sh.contract&&!sh.mission&&!sh.expedition&&!loadCount(sh));if(!sh)throw Error('Ana limanda boş, durdurulmuş gemi gerekli');if((target.needs[g]||0)<n||home.stock[g]<n)throw Error('İhtiyaç veya depodaki ürün yetersiz');let reward=Math.ceil(basePrices[g]*1.5)*n;if(target.money<reward)throw Error('Alıcı adanın altını yetersiz');home.stock[g]-=n;target.needs[g]-=n;target.money-=reward;sh.load[g]=n;sh.to=m.target;sh.stage='out';sh.progress=0;sh.mission={good:g,amount:n,reward};syncLocations(home);return;}
 actMechanics11(s,p,m);if(m.type==='research'&&home.tech.includes('academy'))home.research.remaining=Math.ceil(home.research.remaining*.75);}
@@ -418,9 +534,14 @@ export function cityTier(island){
 
 export const cityShortageDuration=300;
 
+export function cityOrderGoods(island){
+  return Object.fromEntries(Object.entries(island.order.goods)
+    .map(([good,amount])=>[good,Math.ceil(amount*(5+island.cityLevel)/5)]));
+}
+
 export function cityOrderReward(island){
   const bonus=(island.tech.includes('commerce')?20:island.tech.includes('council')?10:0)+3*advancedLevels(island,'Şehir');
-  return Math.floor(island.order.reward*(100+bonus)/100);
+  return Math.floor(island.order.reward*(100+bonus)*(5+island.cityLevel)/500);
 }
 
 function initializeCity(island){
@@ -493,7 +614,7 @@ function manageListing(world,player,index,message){
 
 function seedMarket(world,island){
   if(!port(island))return;
-  for(const good of ['wood','stone',island.resource]){
+  for(const good of new Set(['wood','stone','iron',island.resource])){
     if(island.listings[good] || island.stock[good]<10)continue;
     island.listings[good]={id:world.nextId++,good,quantity:10,gold:price(island,good,true)*10};
   }
@@ -732,4 +853,30 @@ export function voyageSeconds(island){
 function seaCapacity(island){
   return island.tech.includes('logistics')?40+5*advancedLevels(island,'Denizcilik'):
     island.tech.includes('cartography')?30:20;
+}
+
+
+const constructionCosts={
+  oduncu:{wood:10,stone:4},tas:{wood:8,stone:6},balik:{wood:12,stone:3},
+  koyun:{wood:16,stone:6},iplik:{wood:12,stone:8},terzi:{wood:14,stone:8,yarn:4},
+  liman:{wood:18,stone:12},demir:{wood:14,stone:10},bakir:{wood:16,stone:12},
+  demirci:{wood:18,stone:14,iron:6},komur:{wood:16,stone:12,tools:3},
+  celik:{wood:24,stone:28,iron:16},makine:{wood:24,stone:24,steel:14,tools:8},
+  bronz:{wood:18,stone:22,tools:6},gumusisleme:{wood:20,stone:24,tools:8,steel:6},
+  motorAtolyesi:{wood:30,stone:30,steel:20,machines:8},
+  profilAtolyesi:{wood:24,stone:26,steel:12,tools:6},
+  parcaAtolyesi:{wood:25,stone:28,steel:14,bronze:8},
+  kumasAtolyesi:{wood:24,stone:18,tools:6,clothes:8},
+  ekipmanFabrikasi:{wood:36,stone:34,beams:8,machines:6},
+  aracFabrikasi:{wood:42,stone:40,beams:12,precisionParts:6},
+  gucFabrikasi:{wood:44,stone:42,steel:24,industrialEquipment:6},
+  otomasyonFabrikasi:{wood:48,stone:48,beams:14,powerUnits:5}
+};
+
+export function buildingCost(kind){return constructionCosts[kind]||{wood:10,stone:5};}
+
+export function demolitionRefund(building){
+  const original=building.builtCost||{wood:10,stone:5};
+  return Object.fromEntries(Object.entries(original).filter(([,amount])=>amount>=2)
+    .map(([good,amount])=>[good,Math.floor(amount/2)]));
 }

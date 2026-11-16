@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {migrate,act,tick,cityTier,cityTiers,recipes,shipTick,capacity,transportStats,technologies,productionSources} from '../src/logic.mjs';
+import {migrate,act,tick,cityTier,cityTiers,recipes,buildingCost,cityOrderGoods,shipTick,capacity,transportStats,technologies,productionSources} from '../src/logic.mjs';
 
 function setup(){
   const world=migrate();
@@ -166,7 +166,7 @@ test('All ten city tiers can unlock the preceding technologies and goods without
   };
   for(const id of Object.keys(technologies))assert.ok(traceTechnology(id,new Set()),id);
   const researched=new Set();
-  const producible=new Set(['tin','silver']);
+  const producible=new Set(['tin','silver','wood','stone']);
   for(let index=0;index<cityTiers.length;index++){
     for(let n=0;n<Object.keys(technologies).length;n++){
       for(const [id,tech] of Object.entries(technologies)){
@@ -175,6 +175,7 @@ test('All ten city tiers can unlock the preceding technologies and goods without
       }
       for(const [kind,recipe] of Object.entries(recipes)){
         if(recipe.out&&(!recipe.tech||researched.has(recipe.tech))&&
+            Object.keys(buildingCost(kind)).every(good=>producible.has(good))&&
             Object.keys(recipe.inputs||(recipe.input?{[recipe.input]:1}:{})).every(good=>producible.has(good)))
           producible.add(recipe.out);
       }
@@ -184,4 +185,20 @@ test('All ten city tiers can unlock the preceding technologies and goods without
   }
   assert.equal(cityTiers.length,10);
   assert.equal(researched.size,80);
+});
+
+test('City orders scale per city tier and can only be switched once per three active minutes',()=>{
+  const {world,buyer,players}=setup();
+  buyer.cityLevel=2;
+  assert.deepEqual(cityOrderGoods(buyer),{food:42,clothes:14});
+  assert.throws(()=>act(world,players[0],{type:'refreshCityOrder'}));
+  world.tick=180;
+  act(world,players[0],{type:'refreshCityOrder'});
+  assert.deepEqual(cityOrderGoods(buyer),{clothes:9});
+  assert.equal(buyer.cityOrderRefreshAt,360);
+  world.tick=359;
+  assert.throws(()=>act(world,players[0],{type:'refreshCityOrder'}));
+  world.tick=360;
+  act(world,players[0],{type:'refreshCityOrder'});
+  assert.deepEqual(cityOrderGoods(buyer),{wood:35,stone:21});
 });

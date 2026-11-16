@@ -117,11 +117,20 @@
 #city-alert-bar{background:#8a352b;color:#fff4dc;border-color:#632820;font-weight:700;white-space:nowrap}
 .facility-output{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px;background:#e2e8cc;border-radius:6px}
 @media(max-width:780px){.technology-lane{grid-template-columns:repeat(2,minmax(0,1fr))}}
-</style><header><div><small>ÜRETİM VE GELİŞİM · 1.10</small><h1>Ada Çağları</h1></div><div id="status">Birlikte bir dünya kurun.</div></header>
-<section id="lobby"><h2>İki kıyı, ortak bir hikâye.</h2><p>Ortak dünyada ikiniz de bağlıyken zaman ilerler. Test dünyasında tek başına oynayabilirsin.</p><input id="name" placeholder="Oyuncu adı" maxlength="24"><input id="room" placeholder="Ortak oda kodu"><button id="join">Birlikte oyna</button> <button id="invite">Davet bağlantısını kopyala</button><p><button id="solo">Tek başına test et</button></p><small>Test ilerlemesi ayrı kaydedilir.</small><p id="hint"></p></section>
+
+.city-tiers{display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory;overscroll-behavior-inline:contain;padding-bottom:8px}
+.city-tier{flex:0 0 clamp(136px,46%,200px);scroll-snap-align:start}
+.building-choice{display:inline-flex;align-items:center;gap:5px;margin:4px}
+.building-choice .pixel-preview{width:34px;height:34px}
+#coop-lobby{margin-top:12px;padding:12px;border:1px solid #af9565;border-radius:7px;display:grid;gap:7px}
+#coop-lobby[hidden]{display:none}
+#coop-lobby button{margin-right:5px}
+#upgrade-rate{font-variant-numeric:tabular-nums}
+</style><header><div><small>ORTAK LOBİ VE LOJİSTİK · 1.11</small><h1>Ada Çağları</h1></div><div id="status">Birlikte bir dünya kurun.</div></header>
+<section id="lobby"><h2>İki kıyı, ortak bir hikâye.</h2><p>Ortak dünyada ikiniz de bağlıyken zaman ilerler. Test dünyasında tek başına oynayabilirsin.</p><input id="name" placeholder="Oyuncu adı" maxlength="24"><input id="room" placeholder="Ortak oda kodu"><button id="join">Ortak lobiye katıl</button> <button id="invite">Lobi davetini kopyala</button><p><button id="solo">Tek başına test et</button></p><small>Test ilerlemesi ayrı kaydedilir.</small><p id="hint" role="status"></p><section id="coop-lobby" hidden></section></section>
 <main id="game" hidden><nav id="toolbar"><button id="menu">Menü</button><button id="world">Adalar</button><button id="home">Adam</button><button id="upgrades">Geliştirmeler</button><button id="storage">▣ Depo</button><button id="transport">Taşıma filosu</button><button id="marketplace">Ticaret</button></nav><div id="stockbar" aria-label="Temel stoklar"></div><canvas id="canvas"></canvas><aside id="panel" hidden><div class="panel-heading"><button id="close" aria-label="Paneli kapat">×</button><button id="panelBack" hidden>← Geri</button><h2 id="heading"></h2></div><div id="content"></div></aside><div id="toast" role="status" hidden></div><section id="trade-notice" aria-label="Takas bildirimleri" hidden><button id="trade-notice-toggle" aria-controls="trade-notice-list" aria-expanded="false">Takas teklifleri</button><div id="trade-notice-list" aria-live="polite" hidden></div></section></main>
 <script type="module">
-import {terrain as terrainAt, fertility, land, capacity, upgradeCost, technologies, occupied, workPath, cycleLength, pay, validBuild, price, loadCount, upgradeBuildingCost, horsePrice, CATEGORIES, technologies as treeData, mineralChoices, basePrices, nearWater, cityTier, cityTiers, transportStats, productionSources, recipes, progressionXP, xpForNextLevel, levelReward, universityTiers, cityOrderReward, cityShortageDuration, advancedProducts, voyageSeconds} from '/logic.js?v=110';
+import {terrain as terrainAt, fertility, land, capacity, upgradeCost, technologies, occupied, workPath, cycleLength, pay, validBuild, price, loadCount, upgradeBuildingCost, horsePrice, CATEGORIES, technologies as treeData, mineralChoices, basePrices, nearWater, cityTier, cityTiers, transportStats, productionSources, recipes, progressionXP, xpForNextLevel, levelReward, universityTiers, cityOrderReward, cityShortageDuration, advancedProducts, voyageSeconds, buildingCost, demolitionRefund, productionPerSecond, cityOrderGoods} from '/logic.js?v=111';
 function terrain(x,y){return terrainAt(x,y,selected,state?.islands[selected])}
 const names={engines:'Motor',tin:'Kalay',silver:'Gümüş',bronze:'Bronz',silverware:'Gümüş eşya',tools:'Alet',wood:'Odun',stone:'Taş',food:'Yiyecek',wool:'Yün',yarn:'İplik',clothes:'Kıyafet',iron:'Demir',copper:'Bakır',coal:'Kömür',steel:'Çelik',machines:'Makine'},labels={motorAtolyesi:'Motor atölyesi',bronz:'Bronz dökümhanesi',gumusisleme:'Gümüş atölyesi',demirci:'Demirci',oduncu:'Oduncu',tas:'Taş ocağı',balik:'Balıkçı',koyun:'Koyun çiftliği',iplik:'İplikhane',terzi:'Terzi',demir:'Demir madeni',bakir:'Bakır madeni',liman:'Liman',komur:'Kömür madeni',celik:'Çelik atölyesi',makine:'Makine atölyesi'},terrainNames={grass:'Çayır',forest:'Orman',rock:'Kayalık',mountain:'Dağ',lake:'Göl',coast:'Kıyı',city:'Şehir',sea:'Deniz'};
 const advancedBuildings=Object.fromEntries(Object.entries(advancedProducts).map(([good,product])=>[product.building,{...product,good}]));
@@ -139,17 +148,219 @@ function say(message){
   clearTimeout(toastTimer);
   toastTimer=setTimeout(()=>{toast.hidden=true;},3500);
 }function send(m){if(state&&['build','move','demolish','road','buildingUpgrade','storageUpgrade','productionUpgrade','colonize','buyHorse','extract'].includes(m.type))m.island=selected;if(ws?.readyState===1)ws.send(JSON.stringify(m));else say('Bağlantı yok. Yeniden katıl.');}
-function connect(mode){if(!el('name').value.trim()){el('hint').textContent='Adını yaz.';return;}let room=mode==='test'?(localStorage.adaTestRoom||(localStorage.adaTestRoom=crypto.randomUUID())):el('room').value;if(mode!=='test')localStorage.adaRoom=room;localStorage.adaName=el('name').value;history.replaceState(null,'',mode==='test'?'?mode=test':'?room='+encodeURIComponent(room));if(ws)ws.close();state=null;pick=null;panelMode=null;el('panel').hidden=true;let socket=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/api?room='+encodeURIComponent(room)+'&mode='+mode);ws=socket;socket.onopen=()=>socket.send(JSON.stringify({type:'join',token,name:el('name').value}));socket.onmessage=e=>{if(ws!==socket)return;let m=JSON.parse(e.data);if(m.error){say(m.error);el('hint').textContent=m.error;return;}if(m.ack){panelSignature='';extraSignature='';
-if(panelMode==='marketplace'&&['setListing','setBuyListing'].includes(m.ack)){
-  marketplaceSide=m.ack==='setBuyListing'?'buy':'sell';
-  postSide=null;
-}if(m.ack==='save'){rememberWorld(m.savedAt);say('Oyun kaydedildi · '+new Date(m.savedAt).toLocaleTimeString('tr-TR'));}else say('İşlem tamamlandı.');return;}let first=!state;const previousProgress=state?.islands[m.you]?.playerProgress;state=m;receivedAt=performance.now();updateStockbar();if(first){selected=m.you;view='island';el('lobby').hidden=true;el('game').hidden=false;resize();focus(6,6);rememberWorld();}el('status').textContent=(m.mode==='test'?'TEST · ':'ORTAK · ')+(m.running?'Dünya ilerliyor':'Duraklatıldı · Oyuncu bekleniyor')+' · '+m.tick+' sn · Altın: '+m.islands[m.you].money;refreshPanel();updateBarterNotice(first);
-const progress=m.islands[m.you].playerProgress;
-if(previousProgress&&progress&&progress.level>previousProgress.level){
- say('Seviye '+progress.level+' · +'+(progress.goldEarned-previousProgress.goldEarned)+' altın');
-}};socket.onclose=()=>{if(ws!==socket)return;if(state)state.running=false;el('status').textContent='Bağlantı kesildi. Yeniden katıl.';el('game').hidden=true;el('lobby').hidden=false;};}
-el('join').onclick=()=>connect('coop');el('solo').onclick=()=>connect('test');el('invite').onclick=async()=>{let url=location.origin+'/?room='+encodeURIComponent(el('room').value);try{await navigator.clipboard.writeText(url);el('hint').textContent='Davet bağlantısı kopyalandı.'}catch{el('hint').textContent=url}};
-function leaveGame(){const old=ws;ws=null;old?.close();state=null;el('game').hidden=true;el('lobby').hidden=false;history.replaceState(null,'',location.pathname);el('status').textContent='Birlikte veya test modunda oyna.'}setInterval(()=>{if(document.visibilityState==='visible'&&ws?.readyState===1)send({type:'ping'})},2000);document.addEventListener('visibilitychange',()=>{if(document.hidden)ws?.close()});addEventListener('pagehide',()=>ws?.close());
+let worldConnection,lobbyCode,reconnectTimer,reconnectAttempt=0;
+
+function joinName(){
+  const name=el('name').value.trim();
+  if(!name)el('hint').textContent='Adını yaz.';
+  else localStorage.adaName=name;
+  return name;
+}
+function socketFor(path,room,mode){
+  return new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+path+
+    '?room='+encodeURIComponent(room)+(mode?'&mode='+mode:''));
+}
+function closeSocket(){
+  clearTimeout(reconnectTimer);
+  const old=ws;
+  ws=null;
+  old?.close();
+}
+function openLobby(legacyRoom){
+  const name=joinName();
+  if(!name)return;
+  const code=el('room').value.trim();
+  if(!/^[a-zA-Z0-9-]{6,64}$/.test(code)){el('hint').textContent='Geçerli bir lobi kodu yaz.';return;}
+  if(state)leaveGame();
+  closeSocket();
+  worldConnection=null;
+  lobbyCode=code;
+  localStorage.adaRoom=code;
+  history.replaceState(null,'','?room='+encodeURIComponent(code));
+  el('hint').textContent='Ortak lobiye bağlanıyor…';
+  const socket=socketFor('/lobby-api',code);
+  ws=socket;
+  socket.onopen=()=>socket.send(JSON.stringify({type:'join',token,name}));
+  socket.onmessage=event=>{
+    if(ws!==socket)return;
+    const message=JSON.parse(event.data);
+    if(message.error){el('hint').textContent=message.error;return;}
+    if(message.startRoom){connectWorld('coop',message.startRoom);return;}
+    if(!message.lobby)return;
+    el('hint').textContent='';
+    renderLobby(message,legacyRoom);
+  };
+  socket.onclose=()=>{
+    if(ws!==socket)return;
+    el('coop-lobby').hidden=true;
+    if(!el('hint').textContent)el('hint').textContent='Lobi bağlantısı kesildi. Tekrar katılabilirsin.';
+  };
+}
+
+function renderLobby(message,legacyRoom){
+  const box=el('coop-lobby');
+  box.hidden=false;
+  box.replaceChildren();
+  text(box,'Ortak lobi · '+lobbyCode,'h3');
+  text(box,message.players.join(' · ')+' · '+message.players.length+'/2 oyuncu');
+  const ready=message.players.length===2;
+  if(!ready)text(box,'İkinci oyuncu davet bağlantısıyla katılınca oyun seçebilirsin.');
+  const proposal=message.proposal;
+  if(proposal){
+    text(box,proposal.name+(proposal.room?' kayıtlı dünyayı seçti · '+proposal.room:' yeni dünya önerdi.'));
+    const actions=document.createElement('div');
+    if(!proposal.own)button(actions,'Onayla ve oyuna gir',()=>send({type:'approve',id:proposal.id}));
+    button(actions,proposal.own?'Seçimi geri çek':'Reddet',()=>send({type:'reject',id:proposal.id}));
+    box.append(actions);
+  }else{
+    button(box,'Yeni ortak oyun',()=>send({type:'propose',room:null})).disabled=!ready;
+    const games=new Map(message.games.map(game=>[game.room,game.at]));
+    for(const slot of JSON.parse(localStorage.adaSaveSlots||'[]')){
+      if(slot.mode==='coop'&&(slot.lobby===lobbyCode||!slot.lobby))games.set(slot.room,games.get(slot.room)||slot.date);
+    }
+    if(legacyRoom&&!games.has(legacyRoom))games.set(legacyRoom,null);
+    if(games.size)text(box,'Kayıtlı oyunlar','h4');
+    for(const [room,at] of games){
+      button(box,room.slice(0,12)+' · '+(at?new Date(at).toLocaleString('tr-TR'):'Eski kayıt'),
+        ()=>send({type:'propose',room})).disabled=!ready;
+    }
+  }
+  button(box,'Lobiden çık',()=>leaveGame());
+}
+
+function connectWorld(mode,room){
+  const name=joinName();
+  if(!name)return;
+  closeSocket();
+  const id=room||localStorage.adaTestRoom||crypto.randomUUID();
+  if(mode==='test')localStorage.adaTestRoom=id;
+  worldConnection={mode,room:id,name};
+  history.replaceState(null,'',mode==='test'?'?mode=test':'?room='+encodeURIComponent(lobbyCode||id));
+  state=null;
+  pick=null;
+  panelMode=null;
+  el('panel').hidden=true;
+  el('coop-lobby').hidden=true;
+  reconnectAttempt=0;
+  openWorldSocket();
+}
+
+function reconnectWorld(){
+  if(!worldConnection||document.hidden||[0,1].includes(ws?.readyState))return;
+  clearTimeout(reconnectTimer);
+  const delay=Math.min(8000,500*2**Math.min(4,reconnectAttempt++));
+  reconnectTimer=setTimeout(openWorldSocket,delay);
+}
+function openWorldSocket(){
+  if(!worldConnection||document.hidden)return;
+  const {mode,room,name}=worldConnection;
+  const socket=socketFor('/api',room,mode);
+  ws=socket;
+  let admitted=false;
+  socket.onopen=()=>{
+    socket.send(JSON.stringify({type:'join',token,name}));
+    if(document.hidden)socket.send(JSON.stringify({type:'presence',visible:false}));
+  };
+  socket.onmessage=event=>{
+    if(ws!==socket)return;
+    const message=JSON.parse(event.data);
+    if(message.error){
+      say(message.error);
+      el('hint').textContent=message.error;
+      if(!admitted){
+        worldConnection=null;
+        socket.close();
+        el('game').hidden=true;
+        el('lobby').hidden=false;
+      }
+      return;
+    }
+    if(message.ack){
+      panelSignature='';
+      extraSignature='';
+      if(panelMode==='marketplace'&&['setListing','setBuyListing'].includes(message.ack)){
+        marketplaceSide=message.ack==='setBuyListing'?'buy':'sell';
+        postSide=null;
+      }
+      if(message.ack==='save'){
+        rememberWorld(message.savedAt);
+        say('Oyun kaydedildi · '+new Date(message.savedAt).toLocaleTimeString('tr-TR'));
+      }else say('İşlem tamamlandı.');
+      return;
+    }
+    admitted=true;
+    reconnectAttempt=0;
+    const first=!state;
+    const previousProgress=state?.islands[message.you]?.playerProgress;
+    state=message;
+    receivedAt=performance.now();
+    if(first){
+      selected=message.you;
+      view='island';
+      el('lobby').hidden=true;
+      el('game').hidden=false;
+      resize();
+      focus(6,6);
+      rememberWorld();
+    }
+    updateStockbar();
+    el('status').textContent=(mode==='test'?'TEST · ':'ORTAK · ')+(message.running?'Dünya ilerliyor':'Duraklatıldı · Oyuncu bekleniyor')+
+      ' · '+message.tick+' sn · Altın: '+message.islands[message.you].money;
+    refreshPanel();
+    updateBarterNotice(first);
+    const current=message.islands[message.you].playerProgress;
+    if(previousProgress&&current&&current.level>previousProgress.level)
+      say('Seviye '+current.level+' · +'+(current.goldEarned-previousProgress.goldEarned)+' altın');
+  };
+  socket.onclose=event=>{
+    if(ws!==socket)return;
+    ws=null;
+    if(state)state.running=false;
+    if(event.code===1000&&event.reason==='Başka sekmede açıldı'){
+      worldConnection=null;
+      el('game').hidden=true;
+      el('lobby').hidden=false;
+      el('hint').textContent='Oyun başka bir sekmede açıldı.';
+      return;
+    }
+    if(worldConnection){
+      el('status').textContent='Bağlantı kesildi · Yeniden bağlanılıyor…';
+      el('hint').textContent='Yeniden bağlanılıyor…';
+      refreshPanel();
+      reconnectWorld();
+    }
+  };
+}
+el('join').onclick=()=>{
+  const code=el('room').value.trim();
+  const old=JSON.parse(localStorage.adaSaveSlots||'[]').some(slot=>slot.mode==='coop'&&!slot.lobby&&slot.room===code);
+  openLobby(old?code:undefined);
+};
+el('solo').onclick=()=>connectWorld('test');
+el('invite').onclick=async()=>{
+  const url=location.origin+'/?room='+encodeURIComponent(el('room').value.trim());
+  try{await navigator.clipboard.writeText(url);el('hint').textContent='Lobi daveti kopyalandı.'}
+  catch{el('hint').textContent=url}
+};
+function leaveGame(){
+  worldConnection=null;
+  closeSocket();
+  state=null;
+  el('game').hidden=true;
+  el('lobby').hidden=false;
+  el('coop-lobby').hidden=true;
+  el('hint').textContent='';
+  history.replaceState(null,'',location.pathname);
+  el('status').textContent='Birlikte veya test modunda oyna.';
+}
+setInterval(()=>{if(!document.hidden&&ws?.readyState===1)send({type:'ping'});},2000);
+document.addEventListener('visibilitychange',()=>{
+  if(!worldConnection)return;
+  if(ws?.readyState===1)send({type:'presence',visible:!document.hidden});
+  else if(!document.hidden)reconnectWorld();
+});
+addEventListener('pagehide',()=>{if(ws?.readyState===1)ws.close();});
+addEventListener('pageshow',()=>{if(!document.hidden)reconnectWorld();});
 const svgParts={wood:'<path fill="#8c5738" d="M4 10h23v15H4z"/><circle cx="5" cy="17" r="7" fill="#d3a365"/><circle cx="5" cy="17" r="4" fill="none" stroke="#855638"/><path stroke="#bd8752" d="M12 13h13M13 20h13"/>',stone:'<path fill="#a7b3b5" d="m3 24 4-14 12-5 10 13-5 9H8z"/><path fill="#697d84" d="m19 5-3 14 8 8 5-9z"/>',food:'<path fill="#dba749" d="M3 23C1 7 28 4 29 23v4H3z"/><path stroke="#f6d18b" stroke-width="3" d="m9 13 3 8m5-10 3 9"/>',wool:'<path fill="#ede9d9" d="M8 26C-3 22 3 13 7 12 5 2 18 1 21 8c12-2 13 13 5 15-4 8-13 8-18 3"/>',yarn:'<circle fill="#d4a69e" cx="16" cy="16" r="12"/><path fill="none" stroke="#916b72" d="m7 8 18 15M4 15l18 11M11 5l17 14M10 27l12-22"/>',clothes:'<path fill="#7db8c4" d="m10 4-8 7 5 7 4-3v13h12V15l4 3 4-7-8-7-6 4z"/>',iron:'<path fill="#899fad" d="m3 20 6-12h17l4 12-7 6H6z"/><path fill="#c5d7dc" d="m9 8 3 12h18L26 8z"/>',copper:'<path fill="#b36b43" d="m3 20 6-12h17l4 12-7 6H6z"/><path fill="#e3a16b" d="m9 8 3 12h18L26 8z"/>'};
 svgParts.tools='<path fill="#bfc9c5" d="M4 3h22v9H4z"/><path fill="#ae7d4e" d="M12 10h7v21h-7z"/>';svgParts.tin=svgParts.iron;svgParts.silver=svgParts.iron;svgParts.bronze=svgParts.copper;svgParts.silverware=svgParts.machines||svgParts.iron;svgParts.coal='<path fill="#404d54" d="m3 24 4-14 12-5 10 13-5 9H8z"/>';svgParts.engines='<path fill="#647879" d="M4 8h20v17H4zM24 12h5v8h-5z"/><path fill="#e4c777" d="M8 4h11v5H8zM8 13h11v3H8zm0 6h11v3H8z"/>';svgParts.steel=svgParts.iron;svgParts.machines='<path fill="#c9b57f" d="M3 8h26v19H3z"/><circle cx="16" cy="17" r="7" fill="#526c73"/><circle cx="16" cy="17" r="3" fill="#dec799"/>';for(const [good,product] of Object.entries(advancedProducts)){
   svgParts[good]='<path fill="'+product.color+'" d="M3 10l13-6 13 6v14l-13 5-13-5z"/><path fill="#f3dfac" d="M9 13h14v3H9zm3 6h8v3h-8z"/>';
@@ -157,7 +368,7 @@ svgParts.tools='<path fill="#bfc9c5" d="M4 3h22v9H4z"/><path fill="#ae7d4e" d="M
 function icon(k){return '<svg class="icon" data-material="'+k+'" viewBox="0 0 32 32" role="img" aria-label="'+names[k]+'">'+svgParts[k]+'</svg>'}function cost(wood,stone){return '<div class="cost">'+icon('wood')+' '+wood+' Odun &nbsp; '+icon('stone')+' '+stone+' Taş</div>'}const panelHistory=[];
 function openPanel(mode){
   panelHistory.length=0;
-  if(mode==='cityNeeds')delete el('content').dataset.cityIsland;
+  if(mode==='cityNeeds'){delete el('content').dataset.cityIsland;delete el('content').dataset.tierScroll;}
   renderPanel(mode);
 }
 function openSubPanel(mode,configure){
@@ -191,7 +402,7 @@ el('close').onclick=()=>{
 };
 el('marketplace').onclick=()=>openPanel('marketplace');
 el('storage').onclick=()=>openPanel('storage');el('upgrades').onclick=()=>openPanel('upgrades');
-let panelSignature="";function refreshPanel(){if(!state||!panelMode)return;if(panelMode==='marketplace'){marketplacePanel();return;}if(panelMode==='playerLevel'){levelPanel();return;}if(panelMode==='tech'||panelMode==='logistics'){technologyPanel(panelMode==='logistics');return;}if(panelMode==='recipe'){renderRecipe();return;}if(extraPanel())return;if(panelMode==='tile'&&pick){
+let panelSignature="";function refreshPanel(){if(!state||!panelMode)return;if(panelMode==='marketplace'){marketplacePanel();return;}if(panelMode==='buildingInfo'){buildingInfo();return;}if(panelMode==='playerLevel'){levelPanel();return;}if(panelMode==='tech'||panelMode==='logistics'){technologyPanel(panelMode==='logistics');return;}if(panelMode==='recipe'){renderRecipe();return;}if(extraPanel())return;if(panelMode==='tile'&&pick){
   const island=state.islands[selected];
   const building=occupied(island,pick.x,pick.y);
   if(building&&recipes[building.kind]?.out){
@@ -205,7 +416,61 @@ let panelSignature="";function refreshPanel(){if(!state||!panelMode)return;if(pa
     }else updateFacility(island,building);
     return;
   }
-}let signature=JSON.stringify([panelMode,selected,pick,state.running,state.islands[selected].plots.map(b=>[b.kind,b.x,b.y,b.size,b.level,b.status,b.rate,b.actual,b.worker?.stage]),panelMode==="storage"?state.islands[state.you].stock:[state.islands[selected].stock.wood>=10,state.islands[selected].stock.stone>=5,state.islands[selected].stock.wood>=30,state.islands[selected].stock.stone>=10],state.ships.map(s=>[s.owner,s.good,s.back])]);signature+=JSON.stringify([state.islands[state.you].storageLevel,state.islands[state.you].productionLevel,state.islands[state.you].tech,state.islands[state.you].research?.remaining,state.islands[state.you].rp,panelMode==='tech'||panelMode==='production'?state.islands[state.you].stock:null]);if(signature===panelSignature)return;panelSignature=signature;const a=state.islands[selected];const mine=(a.controller===state.you?a:state.islands[state.you]),own=selected===state.you||a.controller===state.you,c=el('content');c.innerHTML='';function pricedButton(label,price,action,disabled=false){let btn=document.createElement('button');btn.innerHTML=label+'<div class="cost">'+Object.entries(price).map(([g,n])=>icon(g)+' '+n+' '+names[g]).join(' · ')+'</div>';btn.disabled=disabled||!state.running||!Object.entries(price).every(([g,n])=>(mine.stock[g]||0)>=n);btn.onclick=action;c.append(btn);}if(panelMode==='upgrades'){el('heading').textContent='Geliştirmeler';for(let [label,mode] of [['Üretim geliştirmeleri','production'],['Teknolojik geliştirmeler','tech'],['Lojistik geliştirmeleri','logistics'],['Şehir gelişimi','cityNeeds']]){let b=document.createElement('button');b.textContent=label;b.onclick=()=>openSubPanel(mode,()=>{if(mode==='cityNeeds'){selected=state.you;view='island';focus(29,29);}});c.append(b)}return;}if(panelMode==='production'){el('heading').textContent='Üretim geliştirmeleri';c.innerHTML='<p>Seviye '+mine.productionLevel+'/5 · Her tamamlanan iş döngüsünde '+(1+mine.productionLevel)+' ürün. Girdili tesisler aynı oranda hammadde tüketir.</p>';pricedButton('Üretimi geliştir',upgradeCost(mine.productionLevel+1),()=>send({type:'productionUpgrade'}),mine.productionLevel>=5);return;}if(panelMode==='tech'){el('heading').textContent='Teknoloji ağacı';for(let [id,t] of Object.entries(technologies)){let card=document.createElement('section');card.className='techcard'+(mine.tech.includes(id)?' done':'');card.innerHTML='<small>'+t.branch+' · '+({mining:'01 · BAŞLANGIÇ →',steel:'02 · MADENCİLİK →',machinery:'03 · SANAYİ'}[id]||'ARAŞTIRMA')+'</small><h3>'+t.name+'</h3><p>Ön koşul: '+(t.requires.map(id=>technologies[id].name).join(' → ')||'Başlangıç')+'</p><p>Açılan: '+t.unlock+'</p><p>'+Object.entries(t.cost).map(([g,n])=>icon(g)+' '+n).join(' · ')+'</p>';let info=document.createElement('p');info.textContent=(t.rp||0)+' araştırma puanı · '+t.time+' sn · Mevcut puan: '+mine.rp+(mine.research?' · Devam eden: '+technologies[mine.research.id].name+' ('+mine.research.remaining+' sn)':'');card.append(info);let b=document.createElement('button');b.textContent=mine.tech.includes(id)?'Tamamlandı':'Araştır';b.disabled=!!mine.research||mine.rp<(t.rp||0)||mine.tech.includes(id)||!state.running||!t.requires.every(id=>mine.tech.includes(id))||!Object.entries(t.cost).every(([g,n])=>(mine.stock[g]||0)>=n);b.onclick=()=>send({type:'research',id});card.append(b);c.append(card);}return;}if(panelMode==='storage'){el('heading').textContent='Depom · '+state.islands[state.you].name;for(let [k,n] of Object.entries(state.islands[state.you].stock)){let row=document.createElement('div');row.className='row';let item=button(row,names[k],()=>showRecipe(k));item.className='material-link';item.insertAdjacentHTML('afterbegin',icon(k));text(row,n+' / '+capacity(mine),'strong');c.append(row)}pricedButton('Depoyu büyüt · Seviye '+mine.storageLevel+'/10 → '+(capacity(mine)+250),upgradeCost(mine.storageLevel),()=>send({type:'storageUpgrade'}),mine.storageLevel>=10);return;}if(panelMode==='resources'){el('heading').textContent=a.name+' · Kaynaklar';c.innerHTML='<p>'+['wood','stone','food','wool',a.resource,'coal'].map(g=>icon(g)+' '+names[g]).join(' · ')+'</p><p class="muted">Orman, kayalık, otlak, kıyı ve tatlı su gölü. Kömür teknoloji gerektirir. Maden türü: '+names[a.resource]+'.</p>';let b=document.createElement('button');b.textContent='Adayı incele';b.onclick=()=>{view='island';focus(6,6);el('panel').hidden=true;panelMode=null};c.append(b);return;}if(!pick)return;let {x,y}=pick,t=terrain(x,y),b=occupied(a,x,y);el('heading').textContent=b?labels[b.kind]:terrainNames[t]+' · '+(x+1)+', '+(y+1);function note(text){let p=document.createElement('p');p.className='muted';p.textContent=text;c.append(p)}if(!b&&['rock','mountain','forest'].includes(t)){let good=t==='rock'?'stone':t==='forest'?'wood':a.resource;let out=document.createElement('p');out.innerHTML=icon(good)+' <strong>'+names[good]+'</strong>';c.append(out);note(t==='mountain'?'Bu dağda '+names[a.resource]+' çıkarılır. Kömür araştırmayla açılır.':t==='rock'?'Bu kayalıktan taş çıkarılır. Taş ocağı işçileri buraya gelir.':'Bu ormandan odun çıkarılır.');}if(!own){note('Bu ada sana ait değil. Şimdilik yalnızca kendi adana bina kurabilirsin.');return;}if(b){buildingActions(c,b);if(b.kind==='liman'){note('Gemi inşa et. Kapasite: 20 ürün. Yolculuk: tek yön 30 dünya saniyesi.');let btn=document.createElement('button');btn.innerHTML='⛵ Yük gemisi inşa et'+cost(30,10);btn.disabled=!state.running||a.stock.wood<30||a.stock.stone<10;btn.onclick=()=>send({type:'ship',x,y});c.append(btn);if(a.stock.wood<30||a.stock.stone<10)note('Depoda yeterli malzeme yok.');for(let [id,sh] of state.ships.entries()){if(sh.owner!==state.you)continue;let p=document.createElement('p');p.textContent='Gemi '+(id+1)+' · '+(sh.back?'Dönüş':'Gidiş')+' '+sh.progress+'/30 · Yük '+sh.cargo;c.append(p);let select=document.createElement('select');select.setAttribute('aria-label','Gemi yükü');for(let [key,label] of Object.entries(names))select.add(new Option(label,key));select.value=sh.good;select.onchange=()=>send({type:'route',id,good:select.value});c.append(select)}}else{note(labels[b.kind]+' üretim yapıyor. Girdili tesisler gerekli ürün varsa çalışır.');if(['oduncu','tas','demir','bakir','komur'].includes(b.kind))note('İşçi kaynağa yürür, çalışır ve ürünle döner. Döngü: '+cycleLength(b)+' dünya saniyesi.');}return;}if(['lake','mountain','city','sea'].includes(t)){note(t==='city'?'Sabit şehir yerleşimi. Buraya üretim binası kurulamaz.':t==='mountain'?'Dağlık alan. İleri dönem madenciliği için ayrıldı.':t==='lake'?'Tatlı su gölü. İleri dönem su üretimi için ayrıldı.':'Deniz alanı.');return;}note(t==='coast'?'Liman için uygun kıyı.':'Bu kareye ne kurmak istersin?');if(t!=='coast'){let rb=document.createElement('button');rb.textContent='Yol döşe · 1 taş · yürüyüşü hızlandırır';rb.onclick=()=>send({type:'road',x,y});c.append(rb);}for(let [kind,label] of Object.entries(labels)){if(kind==='balik'){if(!nearWater(a,selected,x,y))continue;}else if((t==='coast')!==(kind==='liman'))continue;let required={motorAtolyesi:'combustion',bronz:'steel',gumusisleme:'machinery',demirci:'mining',komur:'mining',celik:'steel',makine:'machinery'}[kind];if(required&&!state.islands[state.you].tech.includes(required))continue;if((kind==='demir'&&a.resource!=='iron')||(kind==='bakir'&&a.resource!=='copper'))continue;let btn=document.createElement('button');btn.innerHTML=label+(kind==='koyun'?' · 2×2 kare':'')+cost(10,5);btn.disabled=!state.running||a.stock.wood<10||a.stock.stone<5;btn.onclick=()=>{preview={kind,x,y};el('panel').hidden=true;panelMode=null;};c.append(btn)}if(!state.running)note('İnşa etmek için dünyanın ilerlemesi gerekiyor.');}
+}let signature=JSON.stringify([panelMode,selected,pick,state.running,state.islands[selected].plots.map(b=>[b.kind,b.x,b.y,b.size,b.level,b.status,b.rate,b.actual,b.worker?.stage]),panelMode==="storage"?state.islands[state.you].stock:[state.islands[selected].stock.wood>=10,state.islands[selected].stock.stone>=5,state.islands[selected].stock.wood>=30,state.islands[selected].stock.stone>=10],state.ships.map(s=>[s.owner,s.good,s.back])]);signature+=JSON.stringify([state.islands[state.you].storageLevel,state.islands[state.you].productionLevel,state.islands[state.you].tech,state.islands[state.you].research?.remaining,state.islands[state.you].rp,panelMode==='tech'||panelMode==='production'?state.islands[state.you].stock:null]);if(signature===panelSignature)return;panelSignature=signature;const a=state.islands[selected];const mine=(a.controller===state.you?a:state.islands[state.you]),own=selected===state.you||a.controller===state.you,c=el('content');c.innerHTML='';function pricedButton(label,price,action,disabled=false){let btn=document.createElement('button');btn.innerHTML=label+'<div class="cost">'+Object.entries(price).map(([g,n])=>icon(g)+' '+n+' '+names[g]).join(' · ')+'</div>';btn.disabled=disabled||!state.running||!Object.entries(price).every(([g,n])=>(mine.stock[g]||0)>=n);btn.onclick=action;c.append(btn);}if(panelMode==='upgrades'){el('heading').textContent='Geliştirmeler';for(let [label,mode] of [['Üretim geliştirmeleri','production'],['Teknolojik geliştirmeler','tech'],['Lojistik geliştirmeleri','logistics'],['Şehir gelişimi','cityNeeds']]){let b=document.createElement('button');b.textContent=label;b.onclick=()=>openSubPanel(mode,()=>{if(mode==='cityNeeds'){selected=state.you;view='island';focus(29,29);}});c.append(b)}return;}if(panelMode==='production'){el('heading').textContent='Üretim geliştirmeleri';c.innerHTML='<p>Seviye '+mine.productionLevel+'/5 · Her tamamlanan iş döngüsünde '+(1+mine.productionLevel)+' ürün. Girdili tesisler aynı oranda hammadde tüketir.</p>';pricedButton('Üretimi geliştir',upgradeCost(mine.productionLevel+1),()=>send({type:'productionUpgrade'}),mine.productionLevel>=5);return;}if(panelMode==='tech'){el('heading').textContent='Teknoloji ağacı';for(let [id,t] of Object.entries(technologies)){let card=document.createElement('section');card.className='techcard'+(mine.tech.includes(id)?' done':'');card.innerHTML='<small>'+t.branch+' · '+({mining:'01 · BAŞLANGIÇ →',steel:'02 · MADENCİLİK →',machinery:'03 · SANAYİ'}[id]||'ARAŞTIRMA')+'</small><h3>'+t.name+'</h3><p>Ön koşul: '+(t.requires.map(id=>technologies[id].name).join(' → ')||'Başlangıç')+'</p><p>Açılan: '+t.unlock+'</p><p>'+Object.entries(t.cost).map(([g,n])=>icon(g)+' '+n).join(' · ')+'</p>';let info=document.createElement('p');info.textContent=(t.rp||0)+' araştırma puanı · '+t.time+' sn · Mevcut puan: '+mine.rp+(mine.research?' · Devam eden: '+technologies[mine.research.id].name+' ('+mine.research.remaining+' sn)':'');card.append(info);let b=document.createElement('button');b.textContent=mine.tech.includes(id)?'Tamamlandı':'Araştır';b.disabled=!!mine.research||mine.rp<(t.rp||0)||mine.tech.includes(id)||!state.running||!t.requires.every(id=>mine.tech.includes(id))||!Object.entries(t.cost).every(([g,n])=>(mine.stock[g]||0)>=n);b.onclick=()=>send({type:'research',id});card.append(b);c.append(card);}return;}if(panelMode==='storage'){el('heading').textContent='Depom · '+state.islands[state.you].name;for(let [k,n] of Object.entries(state.islands[state.you].stock)){let row=document.createElement('div');row.className='row';let item=button(row,names[k],()=>showRecipe(k));item.className='material-link';item.insertAdjacentHTML('afterbegin',icon(k));text(row,n+' / '+capacity(mine),'strong');c.append(row)}pricedButton('Depoyu büyüt · Seviye '+mine.storageLevel+'/10 → '+(capacity(mine)+250),upgradeCost(mine.storageLevel),()=>send({type:'storageUpgrade'}),mine.storageLevel>=10);return;}if(panelMode==='resources'){el('heading').textContent=a.name+' · Kaynaklar';c.innerHTML='<p>'+[...new Set(['wood','stone','food','wool','iron',a.resource,'coal'])].map(g=>icon(g)+' '+names[g]).join(' · ')+'</p><p class="muted">Orman, kayalık, otlak, kıyı ve tatlı su gölü. Kömür teknoloji gerektirir. Maden türü: '+names[a.resource]+'.</p>';let b=document.createElement('button');b.textContent='Adayı incele';b.onclick=()=>{view='island';focus(6,6);el('panel').hidden=true;panelMode=null};c.append(b);return;}if(!pick)return;let {x,y}=pick,t=terrain(x,y),b=occupied(a,x,y);el('heading').textContent=b?labels[b.kind]:terrainNames[t]+' · '+(x+1)+', '+(y+1);function note(text){let p=document.createElement('p');p.className='muted';p.textContent=text;c.append(p)}if(!b&&['rock','mountain','forest'].includes(t)){let good=t==='rock'?'stone':t==='forest'?'wood':'iron';let out=document.createElement('p');out.innerHTML=icon(good)+' <strong>'+names[good]+'</strong>';c.append(out);note(t==='mountain'?'Bu dağda demir'+(a.resource==='copper'?' ve bakır':'')+' çıkarılır. Kömür araştırmayla açılır.':t==='rock'?'Bu kayalıktan taş çıkarılır. Taş ocağı işçileri buraya gelir.':'Bu ormandan odun çıkarılır.');}if(!own){note('Bu ada sana ait değil. Şimdilik yalnızca kendi adana bina kurabilirsin.');return;}if(b){buildingActions(c,b);if(b.kind==='liman'){note('Gemi inşa et. Kapasite: 20 ürün. Yolculuk: tek yön 30 dünya saniyesi.');let btn=document.createElement('button');btn.innerHTML='⛵ Yük gemisi inşa et'+cost(30,10);btn.disabled=!state.running||a.stock.wood<30||a.stock.stone<10;btn.onclick=()=>send({type:'ship',x,y});c.append(btn);if(a.stock.wood<30||a.stock.stone<10)note('Depoda yeterli malzeme yok.');for(let [id,sh] of state.ships.entries()){if(sh.owner!==state.you)continue;let p=document.createElement('p');p.textContent='Gemi '+(id+1)+' · '+(sh.back?'Dönüş':'Gidiş')+' '+sh.progress+'/30 · Yük '+sh.cargo;c.append(p);let select=document.createElement('select');select.setAttribute('aria-label','Gemi yükü');for(let [key,label] of Object.entries(names))select.add(new Option(label,key));select.value=sh.good;select.onchange=()=>send({type:'route',id,good:select.value});c.append(select)}}else{note(labels[b.kind]+' üretim yapıyor. Girdili tesisler gerekli ürün varsa çalışır.');if(['oduncu','tas','demir','bakir','komur'].includes(b.kind))note('İşçi kaynağa yürür, çalışır ve ürünle döner. Döngü: '+cycleLength(b)+' dünya saniyesi.');}return;}if(['lake','mountain','city','sea'].includes(t)){note(t==='city'?'Sabit şehir yerleşimi. Buraya üretim binası kurulamaz.':t==='mountain'?'Dağlık alan. İleri dönem madenciliği için ayrıldı.':t==='lake'?'Tatlı su gölü. İleri dönem su üretimi için ayrıldı.':'Deniz alanı.');return;}note(t==='coast'?'Liman için uygun kıyı.':'Bu kareye ne kurmak istersin?');if(t!=='coast'){let rb=document.createElement('button');rb.textContent='Yol döşe · 1 taş · yürüyüşü hızlandırır';rb.onclick=()=>send({type:'road',x,y});c.append(rb);}for(const [kind,label] of Object.entries(labels)){
+  if(kind==='balik'){if(!nearWater(a,selected,x,y))continue;}
+  else if((t==='coast')!==(kind==='liman'))continue;
+  if(kind==='bakir'&&a.resource!=='copper')continue;
+  const choice=button(c,'',()=>{inspectedBuilding=kind;openSubPanel('buildingInfo');});
+  choice.className='building-choice';
+  choice.append(spritePreview(kind));
+  text(choice,label,'span');
+}if(!state.running)note('İnşa etmek için dünyanın ilerlemesi gerekiyor.');}
+let inspectedBuilding;
+const facilityDescriptions={
+  oduncu:'İşçiler yakındaki ormana gider ve kütükleri tesise getirir.',
+  tas:'İşçiler kayalıklardan taş çıkarır.',
+  balik:'Deniz veya tatlı su kıyısında balık tutarak yiyecek sağlar.',
+  koyun:'Dört karelik otlakta koyun yetiştirir ve yün üretir.',
+  demir:'Her adadaki dağlardan demir çıkarır.',
+  bakir:'Bakır yatağı olan adalarda dağlardan bakır çıkarır.',
+  komur:'Dağlardan kömür çıkarır.',
+  liman:'Gemi inşa etmeyi, deniz ticaretini ve pazar ilanı vermeyi sağlar.'
+};
+function buildingInfo(){
+  if(!pick||!inspectedBuilding)return;
+  const {x,y}=pick;
+  const kind=inspectedBuilding,recipe=recipes[kind],island=state.islands[selected],home=state.islands[state.you];
+  const cost=buildingCost(kind);
+  const signature=JSON.stringify([kind,x,y,selected,state.running,home.tech,Object.keys(cost).map(good=>island.stock[good]),island.plots.length]);
+  if(signature===panelSignature)return;
+  panelSignature=signature;
+  const c=el('content');
+  c.replaceChildren();
+  el('heading').textContent=labels[kind];
+  const inputs=recipe.inputs||(recipe.input?{[recipe.input]:1}:{});
+  if(recipe.out){
+    text(c,facilityDescriptions[kind]||names[recipe.out]+' üretir. Girdiler depodan taşınır.');
+    productionFlow(c,{kind,inputs},recipe.out);
+  }else{c.append(spritePreview(kind));text(c,facilityDescriptions[kind]);}
+  text(c,'Kurulum malzemeleri','h3');
+  for(const [good,amount] of Object.entries(cost)){
+    stockRequirement(c,good,amount,'build-cost-'+good);
+    updateRequirement('build-cost-'+good,island.stock[good],amount);
+  }
+  let error='';
+  try{validBuild(island,kind,x,y,selected);}catch(problem){error=problem.message;}
+  const locked=recipe.tech&&!home.tech.includes(recipe.tech);
+  if(locked)text(c,'Gerekli araştırma · '+technologies[recipe.tech].name);
+  if(error)text(c,error);
+  const control=button(c,'Binayı kur',()=>{
+    preview={kind,x,y};
+    el('panel').hidden=true;
+    panelMode=null;
+  });
+  control.className='primary-action';
+  control.disabled=!!error||!!locked||!state.running||!Object.entries(cost).every(([good,n])=>island.stock[good]>=n);
+}
+
 function tile(x,y){return {x:(x-y)*32,y:(x+y)*19}}function focus(x,y){let p=tile(x,y);pan={x:W/2-p.x*zoom,y:H/2-p.y*zoom};pick=null;}function resize(){let r=canvas.getBoundingClientRect();W=Math.max(1,r.width);H=Math.max(1,r.height);canvas.width=W;canvas.height=H;ctx.imageSmoothingEnabled=false}addEventListener('resize',resize);
 el('world').onclick=()=>{view='world';preview=null;moving=null;pick=null;panelMode=null;el('panel').hidden=true;zoom=1;pan={x:0,y:0}};el('home').onclick=()=>{preview=null;moving=null;selected=state.you;view='island';focus(6,6);updateStockbar();el('panel').hidden=true;panelMode=null};canvas.addEventListener('wheel',e=>{
   if(!state||view!=='island')return;
@@ -230,9 +495,22 @@ function button(parent,text,fn){let b=document.createElement('button');b.textCon
 function text(parent,t,tag='p'){let p=document.createElement(tag);p.textContent=t;parent.append(p);return p}
 function costs(obj){return Object.entries(obj).map(([g,n])=>icon(g)+' '+n+' '+names[g]).join(' · ')}
 function field(parent,label,value,options){let l=document.createElement('label');l.textContent=label;let input=document.createElement(options?'select':'input');input.setAttribute('aria-label',label);if(options)for(let [k,v] of Object.entries(options))input.add(new Option(v,k));else{input.type='number';input.min=0;input.max=9999;}input.value=value;l.append(input);parent.append(l);return input}
-function buildingActions(c,b,compact=false){if(['demir','bakir','komur'].includes(b.kind)){let opts=mineralChoices({...state.islands[selected],tech:state.islands[state.you].tech},selected,b),sel=field(c,'Çıkarılacak maden',b.extract||opts[0],Object.fromEntries(opts.map(g=>[g,names[g]])));button(c,'Maden türünü değiştir',()=>send({type:'extract',x:b.x,y:b.y,good:sel.value}));text(c,'Kalay: Metalürji II + seviye 2 maden (çift numaralı adalar). Gümüş: Metalürji III + seviye 3 maden (tek numaralı adalar).');}if(!compact&&b.worker)text(c,'İşçi: '+({out:'Kaynağa gidiyor',work:'Kaynakta çalışıyor',back:'Yükle dönüyor',deliver:'Teslim ediyor',blocked:'Yol / kaynak bekliyor'}[b.worker.stage]||b.worker.stage));if(!compact&&b.output&&Object.values(b.output).some(n=>n)){let loc=document.createElement('p');loc.innerHTML='Tesisteki ürünler: '+costs(b.output);c.append(loc);}if(!compact&&b.inventory&&Object.values(b.inventory).some(n=>n)){let loc=document.createElement('p');loc.innerHTML='Tesisteki hammaddeler: '+costs(b.inventory);c.append(loc);}if(b.kind!=='liman'){if(!compact)text(c,'Seviye '+(b.level||1)+'/5 · '+(b.status||'Üretim bekleniyor')+' · Potansiyel: '+(b.rate||60/cycleLength(b)).toFixed(1)+'/dk · Son 60 sn: '+(b.actual||0)+' ürün');let u=button(c,'Bu binayı geliştir',()=>send({type:'buildingUpgrade',x:b.x,y:b.y}));u.disabled=b.level>=5;let cp=document.createElement('p');cp.innerHTML=costs(upgradeBuildingCost(b));c.append(cp);}button(c,'Taşı · Ücretsiz',()=>{moving={x:b.x,y:b.y,kind:b.kind};el('panel').hidden=true;panelMode=null;});button(c,'Yık · 5 odun + 2 taş iade',()=>{openSubPanel('demolishConfirm')}).className='danger';}
+function buildingActions(c,b,compact=false){if(['demir','bakir','komur'].includes(b.kind)){let opts=mineralChoices({...state.islands[selected],tech:state.islands[state.you].tech},selected,b),sel=field(c,'Çıkarılacak maden',b.extract||opts[0],Object.fromEntries(opts.map(g=>[g,names[g]])));button(c,'Maden türünü değiştir',()=>send({type:'extract',x:b.x,y:b.y,good:sel.value}));text(c,'Kalay: Metalürji II + seviye 2 maden (çift numaralı adalar). Gümüş: Metalürji III + seviye 3 maden (tek numaralı adalar).');}if(!compact&&b.worker)text(c,'İşçi: '+({out:'Kaynağa gidiyor',work:'Kaynakta çalışıyor',back:'Yükle dönüyor',deliver:'Teslim ediyor',blocked:'Yol / kaynak bekliyor'}[b.worker.stage]||b.worker.stage));if(!compact&&b.output&&Object.values(b.output).some(n=>n)){let loc=document.createElement('p');loc.innerHTML='Tesisteki ürünler: '+costs(b.output);c.append(loc);}if(!compact&&b.inventory&&Object.values(b.inventory).some(n=>n)){let loc=document.createElement('p');loc.innerHTML='Tesisteki hammaddeler: '+costs(b.inventory);c.append(loc);}if(b.kind!=='liman'){if(!compact)text(c,'Seviye '+(b.level||1)+'/5 · '+(b.status||'Üretim bekleniyor')+' · Potansiyel: '+(b.rate||60/cycleLength(b)).toFixed(1)+'/dk · Son 60 sn: '+(b.actual||0)+' ürün');let u=button(c,'Bu binayı geliştir',()=>send({type:'buildingUpgrade',x:b.x,y:b.y}));u.disabled=b.level>=5;const rates=text(c,'');
+rates.id='upgrade-rate';
+updateUpgradeRate(state.islands[selected],b);
+let cp=document.createElement('p');cp.innerHTML=costs(upgradeBuildingCost(b));c.append(cp);}button(c,'Taşı · Ücretsiz',()=>{moving={x:b.x,y:b.y,kind:b.kind};el('panel').hidden=true;panelMode=null;});button(c,'Yık',()=>{openSubPanel('demolishConfirm')}).className='danger';}
 function cityTime(seconds){
   return Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0');
+}
+function updateUpgradeRate(island,building){
+  const row=el('upgrade-rate');
+  if(!row)return;
+  const home=state.islands[state.you],level=building.level||1;
+  const now=productionPerSecond(island,building,home,level);
+  const format=value=>value.toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:3});
+  if(level>=5){row.textContent='Potansiyel · '+format(now)+' ürün/sn';return;}
+  const next=productionPerSecond(island,building,home,level+1);
+  row.textContent='Potansiyel · '+format(now)+' → '+format(next)+' ürün/sn · Artış +'+format(Math.max(0,next-now));
 }
 function liveExtra(){if(!state)return;let a=state.islands[state.you];const set=(id,value)=>{if(el(id))el(id).textContent=value};const city=state.islands[selected];
  const tier=cityTier(city);
@@ -260,9 +538,15 @@ function liveExtra(){if(!state)return;let a=state.islands[state.you];const set=(
    set('city-next-tier',next.name+' · +'+(next.population-city.cityPopulation)+' nüfus');
    for(const [good,amount] of Object.entries(next.cost))updateRequirement('city-cost-'+good,city.stock[good],amount);
  }
- for(const [good,amount] of Object.entries(a.order.goods))updateRequirement('city-order-'+good,a.stock[good],amount);
+ for(const [good,amount] of Object.entries(cityOrderGoods(a)))updateRequirement('city-order-'+good,a.stock[good],amount);
+ const switchOrder=el('refresh-city-order');
+ if(switchOrder){
+   const wait=Math.max(0,(a.cityOrderRefreshAt??180)-state.tick);
+   switchOrder.textContent=wait?'Siparişi değiştir · '+cityTime(wait):'Siparişi değiştir';
+   switchOrder.disabled=!!wait||!state.running;
+ }
  const deliver=el('deliver-city-order');
- if(deliver)deliver.disabled=!state.running||!Object.entries(a.order.goods).every(([g,n])=>a.stock[g]>=n);
+ if(deliver)deliver.disabled=!state.running||!Object.entries(cityOrderGoods(a)).every(([g,n])=>a.stock[g]>=n);
  const university=universityTiers[a.universityLevel||0];
  if(university) set('university-clock','+'+university.points+' AP / dk · Sonraki puan: '+Math.max(0,a.universityNextTick-state.tick)+' sn');
  const universityNext=universityTiers[(a.universityLevel||0)+1];
@@ -274,13 +558,16 @@ function liveExtra(){if(!state)return;let a=state.islands[state.you];const set=(
  }
  updateVoyages();
  if(upgrade&&next)upgrade.disabled=!state.running||!Object.entries(next.cost).every(([g,n])=>city.stock[g]>=n);set('order-time','Siparişin kalan süresi: '+a.order.remaining+' sn');for(let [id,sh] of state.ships.entries())set('ship-live-'+id,(sh.status||sh.stage)+' · '+sh.progress+'/30 sn · Yük: '+Object.entries(sh.load).filter(([g,n])=>n).map(([g,n])=>names[g]+' '+n).join(', '));set('trader-live','Altının: '+a.money+' · Tüccarın parası: '+state.trader.money);for(let ai=0;ai<state.islands.length;ai++)for(let g of Object.keys(names)){let target=state.islands[ai];set('market-'+ai+'-'+g,names[g]+': sana satış '+price(target,g,true)+' / senden alış '+price(target,g,false)+' altın · stok '+target.stock[g]);}for(let g of Object.keys(names)){set('quote-'+g,names[g]+': al '+price(state.trader,g,true)+' / sat '+price(state.trader,g,false)+' altın · tüccar stoku '+state.trader.stock[g]);}}
-function extraPanel(){let a=state.islands[selected],mine=state.islands[state.you],b=pick&&occupied(a,pick.x,pick.y),mode=panelMode;if(mode==='tile'&&b?.kind==='liman')mode=(selected===state.you||a.controller===state.you)?'port':'portTrade';if(!['cityNeeds','trade','port','moveConfirm','demolishConfirm','resources','fleet','islandTrade','portTrade'].includes(mode))return false;liveExtra();let sig=JSON.stringify([mode,selected,pick,moving,mine.order.goods,mine.ordersDone,mine.market,state.ships.length,state.contracts.map(c=>[c.id,c.status]),a.horses?.length,a.needs,mode==='port'?state.ships.map(ship=>ship.portOrder?.offerId):null,a.cityLevel,a.universityLevel,mine.tech,a.listings,mode==='portTrade'?state.ships.map(ship=>ship.portOrder?.offerId):null,mode==='portTrade'?marketSignature(a,mine):null,a.plots.map(b=>[b.x,b.y,b.kind])]);if(sig===extraSignature)return true;extraSignature=sig;let c=el('content');const openDrawers=mode==='cityNeeds'&&c.dataset.cityIsland===String(selected)
+function extraPanel(){let a=state.islands[selected],mine=state.islands[state.you],b=pick&&occupied(a,pick.x,pick.y),mode=panelMode;if(mode==='tile'&&b?.kind==='liman')mode=(selected===state.you||a.controller===state.you)?'port':'portTrade';if(!['cityNeeds','trade','port','moveConfirm','demolishConfirm','resources','fleet','islandTrade','portTrade'].includes(mode))return false;liveExtra();let sig=JSON.stringify([mode,selected,pick,moving,mine.order.goods,mine.ordersDone,mine.orderChoice,mine.cityLevel,mine.market,state.ships.length,state.contracts.map(c=>[c.id,c.status]),a.horses?.length,a.needs,mode==='port'?state.ships.map(ship=>ship.portOrder?.offerId):null,a.cityLevel,a.universityLevel,mine.tech,a.listings,mode==='portTrade'?state.ships.map(ship=>ship.portOrder?.offerId):null,mode==='portTrade'?marketSignature(a,mine):null,a.plots.map(b=>[b.x,b.y,b.kind])]);if(sig===extraSignature)return true;extraSignature=sig;let c=el('content');const openDrawers=mode==='cityNeeds'&&c.dataset.cityIsland===String(selected)
  ? [...c.querySelectorAll('.city-drawer[open]')].map(drawer=>drawer.id):[];
+ if(mode==='cityNeeds'&&c.dataset.cityIsland!==String(selected))delete c.dataset.tierScroll;
  c.dataset.cityIsland=mode==='cityNeeds'?String(selected):'';
  c.innerHTML='';el('heading').textContent={cityNeeds:'Şehir ihtiyaçları',trade:'Ticaret ve takas',port:'Liman ve rotalar',portTrade:a.name+' · Liman ticareti',moveConfirm:'Binayı taşı',demolishConfirm:'Binayı yık',resources:a.name+' · Kaynaklar',fleet:'Taşıma filosu',islandTrade:a.name+' · Ticaret'}[mode];
- if(mode==='portTrade'){portMarket(c,a);return true;}if(mode==='fleet'){fleetPanel(c,a);return true;}if(mode==='islandTrade'){islandTradePanel(c,a);return true;}if(mode==='resources'){if(a.owner&&selected!==state.you&&a.controller!==state.you){if(a.plots.some(b=>b.kind==='liman'))button(c,'Liman ticareti',()=>openSubPanel('portTrade'));button(c,'Ada ihtiyaçları',()=>openSubPanel('islandTrade'));}let p=document.createElement('p');p.innerHTML=costs(Object.fromEntries(['wood','stone','food','wool',a.resource,'coal'].map(g=>[g,''])));c.append(p);if(!a.owner&&selected>=2)button(c,'Koloni kur · 200 altın, 60 odun, 40 taş, 10 alet · 45 sn sefer',()=>send({type:'colonize'}));text(c,'Tarımsal verimlilik: %'+a.fertility+'. Koyun çiftliğinin üretim süresini etkiler.');if(a.ai)text(c,'Yapay zekâ yerleşimi · '+a.plots.length+' bina · Ticaret açık. Dünya ilerledikçe inşa eder ve üretir.');if(selected===state.you||a.controller===state.you)button(c,'Şehir gelişimi',()=>openSubPanel('cityNeeds',()=>{view='island';focus(29,29);}));text(c,'Kıyılar, ormanlar, kayalıklar ve göller her adada farklı konumlarda.');button(c,'Adayı incele',()=>{view='island';focus(17,17);el('panel').hidden=true;panelMode=null});return true;}
+ if(mode==='portTrade'){portMarket(c,a);return true;}if(mode==='fleet'){fleetPanel(c,a);return true;}if(mode==='islandTrade'){islandTradePanel(c,a);return true;}if(mode==='resources'){if(a.owner&&selected!==state.you&&a.controller!==state.you){if(a.plots.some(b=>b.kind==='liman'))button(c,'Liman ticareti',()=>openSubPanel('portTrade'));button(c,'Ada ihtiyaçları',()=>openSubPanel('islandTrade'));}let p=document.createElement('p');p.innerHTML=costs(Object.fromEntries([...new Set(['wood','stone','food','wool','iron',a.resource,'coal'])].map(g=>[g,''])));c.append(p);if(!a.owner&&selected>=2)button(c,'Koloni kur · 200 altın, 60 odun, 40 taş, 10 alet · 45 sn sefer',()=>send({type:'colonize'}));text(c,'Tarımsal verimlilik: %'+a.fertility+'. Koyun çiftliğinin üretim süresini etkiler.');if(a.ai)text(c,'Yapay zekâ yerleşimi · '+a.plots.length+' bina · Ticaret açık. Dünya ilerledikçe inşa eder ve üretir.');if(selected===state.you||a.controller===state.you)button(c,'Şehir gelişimi',()=>openSubPanel('cityNeeds',()=>{view='island';focus(29,29);}));text(c,'Kıyılar, ormanlar, kayalıklar ve göller her adada farklı konumlarda.');button(c,'Adayı incele',()=>{view='island';focus(17,17);el('panel').hidden=true;panelMode=null});return true;}
  if(mode==='moveConfirm'){if(!moving){openPanel('tile');return true}text(c,labels[moving.kind]+' → '+(pick.x+1)+', '+(pick.y+1));text(c,'Bedel: Ücretsiz');let err='';try{validBuild({...mine,plots:mine.plots.filter(q=>q.x!==moving.x||q.y!==moving.y)},moving.kind,pick.x,pick.y,state.you);if(selected!==state.you)throw Error('Kendi adanı seç')}catch(e){err=e.message}if(err)text(c,err);let mv={...moving};button(c,'Taşımayı onayla',()=>{send({type:'move',fromX:mv.x,fromY:mv.y,x:pick.x,y:pick.y});moving=null;openPanel('tile')}).disabled=!!err||!state.running;button(c,'İptal',()=>{moving=null;openPanel('tile')});return true;}
- if(mode==='demolishConfirm'){if(!b){openPanel('tile');return true}text(c,labels[b.kind]+' kaldırılacak. İlk inşaat malzemesinin yarısı, aşağı yuvarlanarak iade edilir: 5 odun + 2 taş.');button(c,'Yıkımı onayla',()=>{send({type:'demolish',fromX:b.x,fromY:b.y});openPanel('tile')});button(c,'Vazgeç',()=>openPanel('tile'));return true;}
+ if(mode==='demolishConfirm'){if(!b){openPanel('tile');return true}text(c,labels[b.kind]+' kaldırılacak. Kurulum malzemelerinin yarısı depoya iade edilir.');const refund=text(c,'');
+ refund.innerHTML=costs(demolitionRefund(b));
+ button(c,'Yıkımı onayla',()=>{send({type:'demolish',fromX:b.x,fromY:b.y});openPanel('tile')});button(c,'Vazgeç',()=>openPanel('tile'));return true;}
  if(mode==='cityNeeds'){cityPanel(c,a,mine,openDrawers);return true;}
  if(mode==='port'){voyageCards(c);button(c,'Ticaret · Satış ilanları',()=>openSubPanel('portTrade'));button(c,'Diğer limanlar',()=>el('world').click());if(selected===state.you)button(c,state.mode==='test'?'Gezgin tüccar ve takas':'Takas ve otomatik ticaret',()=>openSubPanel('trade'));buildingActions(c,b);let p=document.createElement('p');p.innerHTML='⛵ Yük gemisi · kapasite 20'+cost(30,10);c.append(p);button(c,'Gemi inşa et',()=>send({type:'ship',x:b.x,y:b.y}));text(c,'Rotalar her yönde en fazla 20 ürün taşır. Tek yön 30 saniye; limanda 4 saniye. Değişiklikler gemi boşken limanda yapılır.');for(let [id,sh] of state.ships.entries()){if(sh.owner!==state.you)continue;let card=document.createElement('section');card.className='tradecard';c.append(card);text(card,'Gemi '+(id+1),'h3');text(card,'').id='ship-live-'+id;if(sh.purchase){text(card,'Satın alma seferinde.');continue;}if(sh.contract){text(card,'Onaylanmış takas siparişini taşıyor.');continue}let destinations=Object.fromEntries(state.islands.map((a,i)=>[i,a.name]).filter(([i])=>i!==state.you&&state.islands[i].owner&&state.islands[i].plots.some(b=>b.kind==='liman')));if(!Object.keys(destinations).length){text(card,'Diğer oyuncunun liman kurması gerekiyor. Test modunda Ticaret menüsündeki gezgin tüccarı kullan.');continue;}let to=field(card,'Hedef liman',sh.to,destinations),good=field(card,'Gidişte satılacak ürün',sh.good,names),amount=field(card,'Gidiş miktarı (0–20)',sh.amount),buy=field(card,'Dönüşte alınacak ürün',sh.buy,names),buyAmount=field(card,'Dönüş miktarı (0–20)',sh.buyAmount),reserve=field(card,'Kendi depomda kalsın',sh.minStock),min=field(card,'En düşük satış fiyatı',sh.minSell),max=field(card,'En yüksek alış fiyatı',sh.maxBuy);button(card,'Rotayı kaydet ve başlat',()=>send({type:'route',id,to:Number(to.value),good:good.value,buy:buy.value,amount:Number(amount.value),buyAmount:Number(buyAmount.value),minStock:Number(reserve.value),minSell:Number(min.value),maxBuy:Number(max.value),enabled:true}));button(card,'Bu seferden sonra dur',()=>send({type:'stopShip',id}));}liveExtra();return true;}
  text(c,'Diğer oyuncunun otomatik alım-satımına izin ver: '+(mine.market?'Açık':'Kapalı'));button(c,mine.market?'Alım-satım iznini kapat':'Alım-satım iznini aç',()=>send({type:'market',enabled:!mine.market}));text(c,'Fiyat stok azaldıkça yükselir. Satın alanın parası ve deposu, satanın stoku kontrol edilir. Sığmayan veya satılamayan yük gemide kalır.');
@@ -340,7 +627,7 @@ function drawMini(island){
   context.lineWidth=2;
   context.strokeRect((x+y)/2*160/36-9,(y-x)/2*160/36-9,18,18);
 }
-function drawDetails(a,now){confirmBuild.hidden=cancelBuild.hidden=!preview;mini.hidden=view!=='island';drawHorses(a);for(let b of a.plots){let p=tile(b.x,b.y);if(b.kind==='koyun'){for(let k=0;k<4;k++)sheep(p.x-19+(k%2)*24+Math.round(Math.sin(anim*.5+k)*2),p.y+37+Math.floor(k/2)*12);}if(b.worker?.path?.length){let w=b.worker,path=w.path,elapsed=state.running?Math.min(1,(now-receivedAt)/1000):0,progress=w.progress||0;if(['out','back'].includes(w.stage)){let next=path[Math.min(path.length-1,Math.floor(progress)+1)];progress+=elapsed*(a.roads.includes(next.join(','))?2:1);}let q=Math.min(path.length-1,progress),lo=Math.floor(q),hi=Math.min(path.length-1,lo+1),f=q-lo,u=path[lo],v=path[hi],pt=tile(u[0]+(v[0]-u[0])*f,u[1]+(v[1]-u[1])*f);person(pt.x,pt.y+22,anim*3,b.kind);drawTool(pt.x,pt.y+22,b.kind,w.stage==='work',anim);if(w.carried){ctx.fillStyle=b.kind==='oduncu'?'#ad743d':'#a0a1a0';ctx.fillRect(Math.round(pt.x+5),Math.round(pt.y+12),12,7);}if(w.stage==='deliver'){ctx.fillStyle='#6d4c33';ctx.font='bold 12px monospace';ctx.fillText('+'+w.carried,p.x,p.y-35);}}if(b.kind==='liman'){let sh=state.ships.find(sh=>sh.from===selected&&sh.stage==='home'||sh.to===selected&&sh.stage==='dock');if(sh){boat(p.x+40,p.y+43);ctx.fillStyle='#614b32';ctx.fillRect(p.x-20,p.y-36,40,5);ctx.fillStyle='#edc34d';ctx.fillRect(p.x-20,p.y-36,40*(sh.stage==='dock'?Math.min(1,sh.progress/4):1),5);}}}if(preview){let invalid=false;try{validBuild(a,preview.kind,preview.x,preview.y,selected)}catch{invalid=true}ctx.globalAlpha=.55;for(let dx=0;dx<(preview.kind==='koyun'?2:1);dx++)for(let dy=0;dy<(preview.kind==='koyun'?2:1);dy++){let p=tile(preview.x+dx,preview.y+dy);poly([[p.x,p.y],[p.x+32,p.y+19],[p.x,p.y+38],[p.x-32,p.y+19]],invalid?'#dc6656':'#97c95f');}let p=tile(preview.x,preview.y);house(p.x,p.y+19,preview.kind);ctx.globalAlpha=1;confirmBuild.disabled=invalid||!state.running;}}
+function drawDetails(a,now){confirmBuild.hidden=cancelBuild.hidden=!preview;mini.hidden=view!=='island';drawHorses(a);for(let b of a.plots){let p=tile(b.x,b.y);if(b.kind==='koyun'){for(let k=0;k<4;k++)sheep(p.x-19+(k%2)*24+Math.round(Math.sin(anim*.5+k)*2),p.y+37+Math.floor(k/2)*12);}if(b.worker?.path?.length){let w=b.worker,path=w.path,elapsed=state.running?Math.min(1,(now-receivedAt)/1000):0,progress=w.progress||0;if(['out','back'].includes(w.stage)){let next=path[Math.min(path.length-1,Math.floor(progress)+1)];progress+=elapsed*(a.roads.includes(next.join(','))?2:1);}let q=Math.min(path.length-1,progress),lo=Math.floor(q),hi=Math.min(path.length-1,lo+1),f=q-lo,u=path[lo],v=path[hi],pt=tile(u[0]+(v[0]-u[0])*f,u[1]+(v[1]-u[1])*f);person(pt.x,pt.y+22,anim*3,b.kind);drawTool(pt.x,pt.y+22,b.kind,w.stage==='work',anim);if(w.carried){ctx.fillStyle=b.kind==='oduncu'?'#ad743d':'#a0a1a0';ctx.fillRect(Math.round(pt.x+5),Math.round(pt.y+12),12,7);}if(w.stage==='deliver'){ctx.fillStyle='#6d4c33';ctx.font='bold 12px monospace';ctx.fillText('+'+w.carried,p.x,p.y-35);}}if(b.kind==='liman'){let sh=state.ships.find(sh=>sh.from===selected&&sh.stage==='home'||sh.to===selected&&sh.stage==='dock');if(sh){boat(p.x+40,p.y+43);ctx.fillStyle='#614b32';ctx.fillRect(p.x-20,p.y-36,40,5);ctx.fillStyle='#edc34d';ctx.fillRect(p.x-20,p.y-36,40*(sh.stage==='dock'?Math.min(1,sh.progress/4):1),5);}}}if(preview){let invalid=false;try{validBuild(a,preview.kind,preview.x,preview.y,selected)}catch{invalid=true}ctx.globalAlpha=.55;for(let dx=0;dx<(preview.kind==='koyun'?2:1);dx++)for(let dy=0;dy<(preview.kind==='koyun'?2:1);dy++){let p=tile(preview.x+dx,preview.y+dy);poly([[p.x,p.y],[p.x+32,p.y+19],[p.x,p.y+38],[p.x-32,p.y+19]],invalid?'#dc6656':'#97c95f');}let p=tile(preview.x,preview.y);house(p.x,p.y+19,preview.kind);ctx.globalAlpha=1;confirmBuild.disabled=invalid||!state.running||!Object.entries(buildingCost(preview.kind)).every(([good,n])=>a.stock[good]>=n);}}
 
 
 function drawRoads(a){let roads=new Set(a.roads||[]);for(let key of roads){let [x,y]=key.split(',').map(Number),p=tile(x,y),cx=p.x,cy=p.y+19;let neighbors=[[1,0,16,9.5],[-1,0,-16,-9.5],[0,1,-16,9.5],[0,-1,16,-9.5]].filter(([dx,dy])=>roads.has((x+dx)+','+(y+dy)));ctx.lineCap='butt';for(let pass=0;pass<2;pass++){ctx.strokeStyle=pass?'#d9bd85':'#685b43';ctx.lineWidth=pass?17:21;ctx.beginPath();if(!neighbors.length){ctx.moveTo(cx-16,cy-9.5);ctx.lineTo(cx+16,cy+9.5)}else for(let [dx,dy,ex,ey] of neighbors){ctx.moveTo(cx,cy);ctx.lineTo(cx+ex,cy+ey)}ctx.stroke()}poly([[cx,cy-10],[cx+17,cy],[cx,cy+10],[cx-17,cy]],'#d9bd85');ctx.lineWidth=1;}}
@@ -408,14 +695,49 @@ function updateStockbar(){
   }
 }
 
-function rememberWorld(at){if(!state)return;let room=state.mode==='test'?localStorage.adaTestRoom:localStorage.adaRoom;let slots=JSON.parse(localStorage.adaSaveSlots||'[]').filter(s=>s.room!==room||s.mode!==state.mode);slots.unshift({room,mode:state.mode,name:state.islands[state.you].owner,date:at||Date.now()});localStorage.adaSaveSlots=JSON.stringify(slots.slice(0,30));}
+function rememberWorld(at){
+  if(!state||!worldConnection)return;
+  const room=worldConnection.room;
+  const slots=JSON.parse(localStorage.adaSaveSlots||'[]').filter(slot=>slot.room!==room||slot.mode!==state.mode);
+  slots.unshift({room,mode:state.mode,lobby:state.mode==='coop'?lobbyCode:undefined,
+    name:state.islands[state.you].owner,date:at||Date.now()});
+  localStorage.adaSaveSlots=JSON.stringify(slots.slice(0,30));
+}
 el('menu').onclick=()=>gameMenu();
-const menuButton=document.createElement('button');menuButton.textContent='Kayıtlar ve yeni oyun';el('lobby').append(menuButton);menuButton.onclick=()=>gameMenu();
-function gameMenu(){if(document.querySelector('.saveModal'))return;let modal=document.createElement('section');modal.className='saveModal';modal.style.position=state?'absolute':'fixed';modal.setAttribute('role','dialog');modal.setAttribute('aria-label','Oyun kayıtları');text(modal,'Menü','h2');if(state){button(modal,'Kaydet',()=>{send({type:'save'});modal.remove()});button(modal,'Ana menü',()=>{modal.remove();leaveGame()});}text(modal,'İlerleme otomatik kaydedilir. Kaydet düğmesi ayrıca sunucuda bir kayıt noktası oluşturur. Yeni oyun ayrı dünyada başlar; önceki dünyana aşağıdan dönebilirsin.');button(modal,'Kapat',()=>modal.remove());for(let mode of ['test','coop'])button(modal,mode==='test'?'Yeni test oyunu':'Yeni ortak oyun',()=>{rememberWorld();let room=crypto.randomUUID();if(mode==='test')localStorage.adaTestRoom=room;else{localStorage.adaRoom=room;el('room').value=room;}modal.remove();connect(mode)});for(let slot of JSON.parse(localStorage.adaSaveSlots||'[]')){let b=button(modal,(slot.mode==='test'?'Test':'Ortak')+' · '+slot.room+' · '+new Date(slot.date).toLocaleString('tr-TR'),()=>{if(slot.mode==='test')localStorage.adaTestRoom=slot.room;else{localStorage.adaRoom=slot.room;el('room').value=slot.room;}modal.remove();connect(slot.mode)});b.className='savedslot';}document.body.append(modal);}
+const menuButton=button(el('lobby'),'Kayıtlar ve yeni oyun',()=>gameMenu());
+
+function gameMenu(){
+  if(document.querySelector('.saveModal'))return;
+  const modal=document.createElement('section');
+  modal.className='saveModal';
+  modal.style.position=state?'absolute':'fixed';
+  modal.setAttribute('role','dialog');
+  modal.setAttribute('aria-label','Oyun kayıtları');
+  text(modal,'Menü','h2');
+  if(state){
+    button(modal,'Kaydet',()=>{send({type:'save'});modal.remove();});
+    button(modal,'Ana menü',()=>{modal.remove();leaveGame();});
+  }
+  button(modal,'Kapat',()=>modal.remove());
+  button(modal,'Yeni test oyunu',()=>{modal.remove();connectWorld('test',crypto.randomUUID());});
+  button(modal,'Ortak lobiye dön',()=>{modal.remove();openLobby();});
+  for(const slot of JSON.parse(localStorage.adaSaveSlots||'[]')){
+    const label=(slot.mode==='test'?'Test':'Ortak')+' · '+slot.room.slice(0,12)+' · '+new Date(slot.date).toLocaleString('tr-TR');
+    button(modal,label,()=>{
+      modal.remove();
+      if(slot.mode==='test')connectWorld('test',slot.room);
+      else{
+        el('room').value=slot.lobby||slot.room;
+        openLobby(slot.room);
+      }
+    }).className='savedslot';
+  }
+  document.body.append(modal);
+}
 
 
 function legacyHouse(x,y,kind){if(kind==='liman'){oldHouse(x,y,kind);return}if(kind==='koyun'){poly([[x-30,y],[x,y-17],[x+30,y],[x,y+50]],'#9caa6d');ctx.strokeStyle='#e2c790';ctx.lineWidth=3;ctx.stroke();ctx.lineWidth=1;for(let k=0;k<5;k++){let sx=x-17+k*8+Math.sin(anim*.6+k)*3,sy=y+9+(k%2)*16;ctx.fillStyle='#34413b';ctx.fillRect(sx-4,sy+3,2,5);ctx.fillRect(sx+4,sy+3,2,5);ctx.fillStyle='#f7efdb';ctx.fillRect(sx-6,sy-3,12,8);ctx.fillRect(sx-4,sy-5,8,3);ctx.fillStyle='#444b44';ctx.fillRect(sx+5,sy-1,4,5);}oldHouse(x-16,y-7,'city');return;}oldHouse(x,y,kind);let colors={oduncu:'#9a683f',tas:'#b6c2bf',balik:'#5aa3b0',iplik:'#cc9b9a',terzi:'#789bc0',demir:'#8f9eaa',bakir:'#cc8b58',komur:'#424a4c',celik:'#b8cbd2',makine:'#e3bd76',demirci:'#d88a43'};let color=colors[kind]||'#bba375';if(['demir','bakir','komur'].includes(kind)){poly([[x-22,y+8],[x-20,y-24],[x+3,y-35],[x+20,y+8]],'#7e8b82');ctx.fillStyle='#172e34';ctx.fillRect(x-10,y-12,19,22);}if(['celik','makine','demirci'].includes(kind)){ctx.fillStyle='#636d69';ctx.fillRect(x+12,y-62,9,42);ctx.fillStyle='#a4b0a3';ctx.globalAlpha=.45;ctx.fillRect(x+11+Math.sin(anim)*3,y-73,12,10);ctx.globalAlpha=1;ctx.fillStyle=kind==='demirci'?'#f0a54d':'#83b8b4';ctx.fillRect(x-12,y-15,10,12);}if(kind==='balik'){ctx.strokeStyle='#bca579';ctx.lineWidth=2;for(let k=0;k<4;k++){ctx.beginPath();ctx.moveTo(x-25+k*6,y+7);ctx.lineTo(x-20+k*6,y+28);ctx.stroke()}poly([[x+12,y+12],[x+40,y+12],[x+32,y+20],[x+20,y+20]],'#9b7650');}if(kind==='iplik'){ctx.fillStyle='#d9bca5';ctx.fillRect(x-28,y-8,13,18);ctx.fillStyle='#b98786';ctx.fillRect(x-31,y-5,19,12);}if(kind==='terzi'){poly([[x-27,y-24],[x+25,y-24],[x+32,y-5],[x-28,y-5]],'#7299bd');for(let k=0;k<4;k++){ctx.fillStyle=k%2?'#d8c9a1':'#bf849a';ctx.fillRect(x-25+k*7,y-4,6,12)}}for(let k=0;k<3;k++){ctx.fillStyle='#293e40';ctx.fillRect(x+22+k*6,y+7+(k%2)*5,8,8);ctx.fillStyle=color;ctx.fillRect(x+23+k*6,y+6+(k%2)*5,7,6);}ctx.fillStyle='#f5df9f';ctx.font='12px system-ui';let signs={oduncu:'🪵',tas:'🪨',balik:'🐟',koyun:'🐑',iplik:'🧶',terzi:'👕',demir:'Fe',bakir:'Cu',komur:'C',celik:'🔩',makine:'⚙',demirci:'🔨'};ctx.fillText(signs[kind]||'',x-8,y-45);}
-function drawHorses(a){const stats=transportStats(state.islands[a.controller]||a);for(let d of a.deliveries||[]){let q=Math.min(d.path.length-1,d.progress+(state.running?stats.speed*Math.min(1,(performance.now()-receivedAt)/1000):0)),lo=Math.floor(q),hi=Math.min(d.path.length-1,lo+1),f=q-lo,u=d.path[lo],v=d.path[hi];if(!u||!v)continue;let p=tile(u[0]+(v[0]-u[0])*f,u[1]+(v[1]-u[1])*f),x=p.x,y=p.y+18;if(stats.mode==='motor'){drawTruck(x,y,d);continue;}ctx.fillStyle='#50362a';ctx.fillRect(x-12,y-14,24,12);ctx.fillRect(x+7,y-24,7,17);ctx.fillRect(x+8,y-25,12,7);ctx.fillRect(x+9,y-29,3,6);ctx.strokeStyle='#332e29';ctx.lineWidth=3;for(let k=0;k<4;k++){ctx.beginPath();ctx.moveTo(x-9+k*6,y-4);ctx.lineTo(x-11+k*6+Math.sin(anim*7+k)*3,y+7);ctx.stroke()}if(stats.mode==='wagon'){ctx.strokeStyle='#b89b6b';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x-12,y-5);ctx.lineTo(x-22,y+5);ctx.stroke();ctx.fillStyle='#ab8253';ctx.fillRect(x-38,y-3,20,12);ctx.fillStyle='#24343a';ctx.fillRect(x-36,y+9,5,5);ctx.fillRect(x-24,y+9,5,5);ctx.fillStyle='#d4b778';if(d.amount)ctx.fillRect(x-36,y-9,16,9);}else if(d.amount){ctx.fillStyle='#d4b778';ctx.fillRect(x-10,y-19,11,7);}ctx.font='13px system-ui';ctx.fillStyle='#fff1c3';ctx.fillText(d.stage==='empty'?'Almaya gidiyor':d.stage==='return'?'Depoya dönüyor':(names[d.good]||d.good)+' ×'+d.amount,x-30,y-17);}}
+function drawHorses(a){const stats=transportStats(state.islands[a.controller]||a);for(let d of a.deliveries||[]){let q=Math.min(d.path.length-1,d.progress+(state.running?stats.speed*Math.min(1,(performance.now()-receivedAt)/1000):0)),lo=Math.floor(q),hi=Math.min(d.path.length-1,lo+1),f=q-lo,u=d.path[lo],v=d.path[hi];if(!u||!v)continue;let p=tile(u[0]+(v[0]-u[0])*f,u[1]+(v[1]-u[1])*f),x=p.x,y=p.y+18;if(stats.mode==='motor'){drawTruck(x,y,d);continue;}ctx.fillStyle='#50362a';ctx.fillRect(x-12,y-14,24,12);ctx.fillRect(x+7,y-24,7,17);ctx.fillRect(x+8,y-25,12,7);ctx.fillRect(x+9,y-29,3,6);ctx.strokeStyle='#332e29';ctx.lineWidth=3;for(let k=0;k<4;k++){ctx.beginPath();ctx.moveTo(x-9+k*6,y-4);ctx.lineTo(x-11+k*6+Math.sin(anim*7+k)*3,y+7);ctx.stroke()}if(stats.mode==='wagon'){ctx.strokeStyle='#b89b6b';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x-12,y-5);ctx.lineTo(x-22,y+5);ctx.stroke();ctx.fillStyle='#ab8253';ctx.fillRect(x-38,y-3,20,12);ctx.fillStyle='#24343a';ctx.fillRect(x-36,y+9,5,5);ctx.fillRect(x-24,y+9,5,5);ctx.fillStyle='#d4b778';if(d.amount)ctx.fillRect(x-36,y-9,16,9);}else if(d.amount){ctx.fillStyle='#d4b778';ctx.fillRect(x-10,y-19,11,7);}ctx.font='13px system-ui';ctx.fillStyle='#fff1c3';ctx.fillText(d.stage==='empty'?(d.amount?'Ek yükü almaya gidiyor · '+d.amount:'Almaya gidiyor'):d.stage==='return'?'Depoya dönüyor':(names[d.good]||d.good)+' ×'+d.amount,x-30,y-17);}}
 
 // Original, code-native pixel sprites. Logical pixels stay sharp at every camera zoom.
 const pixelCache=new Map();
@@ -688,7 +1010,13 @@ function cityPanel(container,island,home,openDrawers){
     text(stage,item.population+' kişi','span');
     tiers.append(stage);
   }
+  const tierScroll=container.dataset.tierScroll;
+  tiers.setAttribute('aria-label','Şehir kademeleri');
+  tiers.tabIndex=0;
   container.append(tiers);
+  if(tierScroll!==undefined)tiers.scrollLeft=Number(tierScroll);
+  else tiers.scrollLeft=tiers.children[island.cityLevel]?.offsetLeft-tiers.children[0]?.offsetLeft||0;
+  tiers.onscroll=()=>{container.dataset.tierScroll=tiers.scrollLeft;};
   text(container,'').id='city-population';
   text(container,'','strong').id='city-shortage-clock';
   const timer=document.createElement('progress');
@@ -704,10 +1032,11 @@ function cityPanel(container,island,home,openDrawers){
   if(island===home){
     const orders=cityDrawer(container,'city-orders','Şehir siparişleri · Altın ve araştırma puanı',openDrawers);
     text(orders,'Depodaki miktar / Siparişin istediği','p').className='muted';
-    for(const [good,amount] of Object.entries(home.order.goods))
+    for(const [good,amount] of Object.entries(cityOrderGoods(home)))
       stockRequirement(orders,good,amount,'city-order-'+good);
     rewardCards(orders,cityOrderReward(home),10);
     text(orders,'').id='order-time';
+    button(orders,'Siparişi değiştir',()=>send({type:'refreshCityOrder'})).id='refresh-city-order';
     const deliver=button(orders,'Siparişi teslim et',()=>send({type:'deliverOrder'}));
     deliver.id='deliver-city-order';
     deliver.className='primary-action';
@@ -1123,6 +1452,7 @@ function updateFacility(island,building){
   const inputs=recipe.inputs || (recipe.input?{[recipe.input]:1}:{});
   const amount=1+island.productionLevel;
   const issue=facilityIssue(island,building);
+  updateUpgradeRate(island,building);
   const badge=el('facility-status');
   if(!badge)return;
   badge.className='state-pill '+(issue?'waiting':'ready');

@@ -13,3 +13,29 @@ test('AI starters include a local mine and put the tool workshop on the iron isl
   }
   assert.deepEqual(migrate(structuredClone(world)),world);
 });
+
+test('A partially loaded carrier collects another matching lot within eight tiles',()=>{
+  const world=migrate();
+  const island=world.islands[0];
+  island.owner='QA';
+  island.controller=0;
+  island.plots=[
+    {kind:'koyun',id:'farm1',x:20,y:25,size:2,phase:0,output:{wool:10}},
+    {kind:'koyun',id:'farm2',x:24,y:25,size:2,phase:0,output:{wool:3}},
+    {kind:'koyun',id:'farm3',x:9,y:15,size:2,phase:0,output:{wool:3}}
+  ];
+  let pickup=false,loaded=0;
+  for(let i=0;i<80;i++){
+    tick(world);
+    const delivery=island.deliveries.find(job=>job.extraPickup);
+    if(delivery){
+      assert.equal(delivery.from,'farm2');
+      pickup=true;
+      loaded=Math.max(loaded,delivery.amount);
+    }
+    if(island.stock.wool>0)break;
+  }
+  assert.ok(pickup);
+  assert.ok(loaded>10&&loaded<=20);
+  assert.equal(island.stock.wool,loaded);
+});
