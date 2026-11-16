@@ -6,13 +6,13 @@
 #panel button,#panel summary,#toolbar button,#stockbar button{min-height:44px}
 #panel .primary-action{color:#fff5d8;background:#416746;border-color:#315237;box-shadow:inset 0 -3px #315237;font-weight:700}
 #panel .primary-action:hover:enabled{background:#315d38}
-#panel .product-chip{display:inline-flex;justify-content:center;align-items:center;gap:6px;padding:5px 9px;line-height:1.2}
+#panel .product-chip{display:inline-flex;justify-content:center;align-items:center;gap:6px;padding:5px 9px;line-height:1.2;width:auto;margin:0}
 .product-chip .icon{width:24px;height:24px;flex:none}
 .pixel-preview{width:48px;height:48px;image-rendering:pixelated;flex:none}
 .production-flow{display:flex;align-items:center;justify-content:center;gap:7px;flex-wrap:wrap;background:#f4e2b3;padding:10px;margin:12px 0;border-radius:6px}
 .flow-inputs{display:flex;flex-wrap:wrap;justify-content:center;gap:4px}
 .flow-facility{display:grid;justify-items:center;font-size:.86rem;font-weight:700}
-.facility-header,.gold-price:before{content:'';display:inline-block;width:.81em;height:.81em;margin-right:.35em;background:#e2b53e;border:2px solid #9c732a;border-radius:50%;vertical-align:-.07em}.market-offer-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.facility-header,.market-offer-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .state-pill{border-radius:20px;padding:4px 8px;font-weight:650}
 .state-pill.waiting{background:#f2dc9a;color:#624410}
 .state-pill.ready{background:#dce5bc;color:#304d32}
@@ -559,7 +559,7 @@ function facilityPanel(container,island,building){
   const amount=1+island.productionLevel;
   const header=document.createElement('div');
   header.className='facility-header';
-  text(header,'Seviye '+building.level,'strong');
+  text(header,'Seviye '+(building.level||1),'strong');
   text(header,'','span').id='facility-status';
   container.append(header);
   productionFlow(container,{kind:building.kind,inputs},good,amount);
