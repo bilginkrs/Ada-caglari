@@ -38,10 +38,11 @@ function actBase(s,p,m){let a=s.islands[p.island];
  if(m.type==='reply'){let c=s.contracts.find(c=>c.id===m.id&&c.to===p.island&&c.status==='pending');if(!c)throw Error('Teklif bulunamadı');if(!m.accept){c.status='rejected';return;}let src=s.islands[c.from],sh=s.ships.find(sh=>sh.owner===c.from&&!sh.contract&&!sh.enabled&&sh.stage==='home'&&!loadCount(sh));if(!sh||!port(a)||!port(src))throw Error('İki liman ve teklif sahibinin boş, durdurulmuş gemisi gerekli');if(a.stock[c.receive]<c.receiveN||src.stock[c.give]<c.giveN)throw Error('Takas ürünleri yetersiz');a.stock[c.receive]-=c.receiveN;c.escrow=c.receiveN;src.stock[c.give]-=c.giveN;sh.load[c.give]=c.giveN;sh.contract=c.id;sh.to=c.to;sh.stage='out';sh.progress=0;sh.enabled=false;c.status='shipping';return;}
  throw Error('Bilinmeyen işlem');}
 export function shipTick(s,sh){let a=s.islands[sh.from],b=s.islands[sh.to];if(!a||!b)return;let c=s.contracts.find(c=>c.id===sh.contract);sh.back=sh.stage==='return';sh.cargo=loadCount(sh);
- if(sh.stage==='home'){for(let g of goods)unload(a,sh,g);if(loadCount(sh)){sh.status='Depo dolu · yük gemide bekliyor';return;}if(c){c.status='done';delete sh.contract;}if(!sh.enabled){sh.status='Limanda';return;}if(!port(a)||!port(b)||(!b.market&&(!Number.isInteger(a.controller)||b.controller!==a.controller))){sh.status='Hedef liman / ticaret izni bekleniyor';return;}load(a,sh,sh.good,Math.min(sh.amount,Math.max(0,a.stock[sh.good]-sh.minStock)));sh.stage='out';sh.progress=0;sh.status='Yola çıktı';return;}
+ if(sh.stage==='home'){for(let g of goods)unload(a,sh,g);if(loadCount(sh)){sh.status='Depo dolu · yük gemide bekliyor';return;}if(c){c.status='done';delete sh.contract;}if(sh.portOrder)sh.portOrder.delivered=true;if(!sh.enabled){sh.status='Limanda';return;}if(!port(a)||!port(b)||(!b.market&&(!Number.isInteger(a.controller)||b.controller!==a.controller))){sh.status='Hedef liman / ticaret izni bekleniyor';return;}load(a,sh,sh.good,Math.min(sh.amount,Math.max(0,a.stock[sh.good]-sh.minStock)));sh.stage='out';sh.progress=0;sh.status='Yola çıktı';return;}
  if(sh.stage==='out'||sh.stage==='return'){sh.status=sh.stage==='out'?'Gidiş':'Dönüş';if(++sh.progress>=(a.tech.includes('logistics')?20:30)){sh.stage=sh.stage==='out'?'dock':'home';sh.progress=0;}return;}
  if(sh.stage==='dock'&&sh.purchase){
    const purchase=sh.purchase;
+   if(sh.progress++===0&&sh.portOrder)return;
    b.money+=purchase.gold;
    sh.load[purchase.good]=(sh.load[purchase.good]||0)+purchase.quantity;
    delete sh.purchase;
@@ -186,6 +187,7 @@ function buyListing(world,player,message){
   seller.stock[listing.good]-=listing.quantity;
   delete seller.listings[listing.good];
   ship.purchase={...listing};
+  ship.portOrder={offerId:listing.id,target:message.target,good:listing.good,quantity:listing.quantity,delivered:false};
   ship.to=message.target;
   ship.stage='out';
   ship.progress=0;

@@ -47,6 +47,10 @@ test('Port purchase reserves the advertised lot and total gold, survives a reloa
   ({0:buyer,1:seller}=world.islands);
   ship=world.ships[0];
   for(let i=0;i<31;i++)shipTick(world,ship);
+  assert.equal(ship.stage,'dock');
+  assert.equal(ship.portOrder.delivered,false);
+  assert.equal(seller.money,sellerCash);
+  shipTick(world,ship);
   assert.equal(ship.load.wood,10);
   assert.equal(seller.money,sellerCash+5);
   buyer.stock.wood=capacity(buyer);
@@ -56,6 +60,7 @@ test('Port purchase reserves the advertised lot and total gold, survives a reloa
   shipTick(world,ship);
   assert.equal(buyer.stock.wood,capacity(buyer));
   assert.equal(ship.load.wood,0);
+  assert.equal(ship.portOrder.delivered,true);
   assert.equal(seller.money,sellerCash+5);
 });
 
