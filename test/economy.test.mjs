@@ -61,3 +61,39 @@ test('A busy ship serves accepted barters in acceptance order and then resumes i
   assert.equal(boat.enabled,true);
   assert.equal(world.islands[0].stock.copper,10);
 });
+
+test('Player progression grants gold once at each level and persists per player',()=>{
+  const world=setup();
+  const [a,b]=world.islands;
+  const [player]=world.players;
+  const nextOrders=(count)=>{
+    for(let i=0;i<count;i++){
+      for(const [good,n] of Object.entries(a.order.goods))a.stock[good]=n;
+      const orderGold=a.order.reward;
+      const gold=a.money;
+      const previous=a.playerProgress.goldEarned;
+      act(world,player,{type:'deliverOrder'});
+      assert.equal(a.money-gold,orderGold+a.playerProgress.goldEarned-previous);
+    }
+  };
+  nextOrders(3);
+  assert.deepEqual(a.playerProgress,{level:2,xp:5,goldEarned:100});
+  nextOrders(5);
+  assert.deepEqual(a.playerProgress,{level:3,xp:30,goldEarned:250});
+  assert.deepEqual(b.playerProgress,{level:1,xp:0,goldEarned:0});
+  const saved=migrate(structuredClone(world));
+  assert.deepEqual(saved.islands[0].playerProgress,a.playerProgress);
+  assert.equal(saved.islands[0].money,a.money);
+});
+
+test('Kept research gives experience once at completion, not when started',()=>{
+  const world=setup();
+  const [a]=world.islands;
+  const [player]=world.players;
+  act(world,player,{type:'research',id:'hauling'});
+  assert.equal(a.playerProgress.xp,0);
+  a.research.remaining=1;
+  tick(world);
+  tick(world);
+  assert.equal(a.playerProgress.xp,40);
+});

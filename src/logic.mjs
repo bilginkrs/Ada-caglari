@@ -22,13 +22,42 @@ function port(a){return a.plots.some(b=>b.kind==='liman')}
 function integer(n,max=9999){if(!Number.isInteger(n)||n<0||n>max)throw Error('Geçersiz miktar');return n}
 function unload(a,sh,g,n=Infinity){let q=Math.max(0,Math.min(n,sh.load[g]||0,capacity(a)-a.stock[g]));a.stock[g]+=q;sh.load[g]-=q;return q}
 function load(a,sh,g,n){let q=Math.max(0,Math.min(n,a.stock[g],(sh.capacity||20)-loadCount(sh)));a.stock[g]-=q;sh.load[g]+=q;return q}
+export const progressionXP = {
+  cityOrder:35,
+  research:40,
+  cityUpgrade:75,
+  trade:25
+};
+
+export function xpForNextLevel(level){
+  return 100+50*(level-1);
+}
+
+export function levelReward(level){
+  return xpForNextLevel(level-1);
+}
+
+function gainXP(world,islandIndex,activity){
+  if(!world.players.some(player=>player.island===islandIndex))return;
+  const island=world.islands[islandIndex];
+  const progress=island.playerProgress ||= {level:1,xp:0,goldEarned:0};
+  progress.xp+=progressionXP[activity];
+  while(progress.xp>=xpForNextLevel(progress.level)){
+    progress.xp-=xpForNextLevel(progress.level);
+    progress.level++;
+    const reward=levelReward(progress.level);
+    progress.goldEarned+=reward;
+    island.money+=reward;
+  }
+}
+
 function actBase(s,p,m){let a=s.islands[p.island];
  if(m.type==='build'){let r=recipes[m.kind];if(!r)throw Error('Bilinmeyen bina');if(r.tech&&!a.tech.includes(r.tech))throw Error('Önce teknolojiyi araştır');if(['demir','bakir'].includes(m.kind)&&r.out!==a.resource)throw Error('Bu adada bu maden yok');validBuild(a,m.kind,m.x,m.y,p.island);pay(a,{wood:10,stone:5});let b={kind:m.kind,x:m.x,y:m.y,size:m.kind==='koyun'?2:1,phase:0,fertility:a.fertility};b.path=workPath(b,p.island,a);a.plots.push(b);return;}
  if(m.type==='move'||m.type==='demolish'){let b=a.plots.find(b=>b.x===m.fromX&&b.y===m.fromY);if(!b)throw Error('Bina bulunamadı');if(b.kind==='liman'&&a.plots.filter(b=>b.kind==='liman').length===1&&(s.ships.some(sh=>sh.from===p.island||sh.to===p.island||sh.barterRoute===p.island)||s.contracts.some(c=>c.status==='queued'&&(c.from===p.island||c.to===p.island))))throw Error('Filo veya bekleyen takas bu limanı kullanıyor. Önce ikinci bir liman kur');if(m.type==='move'){let other={...a,plots:a.plots.filter(q=>q!==b)};validBuild(other,b.kind,m.x,m.y,p.island);b.x=m.x;b.y=m.y;b.path=workPath(b,p.island,a);b.phase=0;}else{if(a.stock.wood+5>capacity(a)||a.stock.stone+2>capacity(a))throw Error('İade için depoda 5 odun ve 2 taş yeri aç');a.stock.wood+=5;a.stock.stone+=2;a.plots=a.plots.filter(q=>q!==b);}return;}
  if(m.type==='storageUpgrade'){if(a.storageLevel>=10)throw Error('En yüksek depo seviyesi');pay(a,upgradeCost(a.storageLevel));a.storageLevel++;return;}
  if(m.type==='productionUpgrade'){if(a.productionLevel>=5)throw Error('En yüksek üretim seviyesi');pay(a,upgradeCost(a.productionLevel+1));a.productionLevel++;return;}
  if(m.type==='research'){let t=technologies[m.id];if(!t||a.research||a.rp<(t.rp||0)||a.tech.includes(m.id)||!t.requires.every(k=>a.tech.includes(k)))throw Error('Araştırma koşulları karşılanmıyor');pay(a,t.cost);a.research={id:m.id,remaining:t.time||90};a.rp-=t.rp||0;return;}
- if(m.type==='deliverOrder'){pay(a,a.order.goods);a.money+=a.order.reward;a.rp+=10;a.ordersDone++;a.order=order(a);return;}
+ if(m.type==='deliverOrder'){pay(a,a.order.goods);a.money+=a.order.reward;a.rp+=10;a.ordersDone++;a.order=order(a);gainXP(s,p.island,'cityOrder');return;}
  if(m.type==='market'){a.market=!!m.enabled;return;}
  if(m.type==='trader'){if(s.mode!=='test')throw Error('Gezgin tüccar yalnızca test modunda');let g=m.good,n=integer(m.amount,100);if(!goods.includes(g)||n<1)throw Error('Ürün ve miktar seç');let t=s.trader,u=price(t,g,!!m.buy);if(m.buy){if(t.stock[g]<n||a.money<u*n||a.stock[g]+n>capacity(a))throw Error('Stok, para veya depo kapasitesi yetersiz');t.stock[g]-=n;a.stock[g]+=n;a.money-=u*n;t.money+=u*n;}else{if(a.stock[g]<n||t.money<u*n)throw Error('Stok veya tüccarın parası yetersiz');a.stock[g]-=n;t.stock[g]+=n;a.money+=u*n;t.money-=u*n;}return;}
  if(m.type==='ship'){if(!a.plots.some(b=>b.kind==='liman'&&b.x===m.x&&b.y===m.y))throw Error('Limanı seç');pay(a,{wood:30,stone:10});s.ships.push({owner:p.island,from:p.island,to:1-p.island,good:'wood',buy:a.resource==='iron'?'copper':'iron',amount:10,buyAmount:10,minStock:20,minSell:0,maxBuy:999,load:zero(),stage:'home',progress:0,back:false,capacity:20,enabled:false,status:'Rota bekliyor'});return;}
@@ -86,12 +115,20 @@ export function shipTick(s,sh){let a=s.islands[sh.from],b=s.islands[sh.to];if(!a
    for(const good of goods)unload(a,sh,good);
    if(loadCount(sh)){sh.status='Depo dolu · yük gemide bekliyor';return;}
    if(c){
-     c.status='done';
+     if(c.status!=='done'){
+       c.status='done';
+       gainXP(s,c.from,'trade');
+       gainXP(s,c.to,'trade');
+     }
      delete sh.contract;
      if(Number.isInteger(sh.barterRoute))sh.to=sh.barterRoute;
      delete sh.barterRoute;
    }
-   if(sh.portOrder)sh.portOrder.delivered=true;
+   if(sh.portOrder&&!sh.portOrder.delivered){
+     sh.portOrder.delivered=true;
+     gainXP(s,sh.owner,'trade');
+     gainXP(s,sh.portOrder.target,'trade');
+   }
    if(dispatchBarter(s,sh))return;
    if(!sh.enabled){sh.status='Limanda';return;}
    const destination=s.islands[sh.to];
@@ -113,7 +150,7 @@ export function shipTick(s,sh){let a=s.islands[sh.from],b=s.islands[sh.to];if(!a
    sh.stage='return';sh.progress=0;sh.status='Satın alınan yük dönüyor';
    return;
  }
- if(sh.stage==='dock'&&sh.mission){let m=sh.mission;sh.status='İhtiyaç siparişi teslim ediliyor';if(b.stock[m.good]+m.amount>capacity(b))return;b.stock[m.good]+=m.amount;sh.load[m.good]-=m.amount;a.money+=m.reward;delete sh.mission;sh.stage='return';sh.progress=0;return;}if(sh.stage==='dock'){sh.status='Boşaltma / yükleme';if(++sh.progress<4)return;sh.progress=0;if(c){if(b.stock[c.give]+c.giveN>capacity(b)){sh.status='Hedef depo dolu · takas yükü bekliyor';return;}unload(b,sh,c.give,c.giveN);sh.load[c.receive]+=c.escrow;c.escrow=0;c.status='returning';}else if(b.controller===a.controller&&b.controller!==null){for(let g of goods)unload(b,sh,g);load(b,sh,sh.buy,sh.buyAmount);}else if(b.market&&port(b)){let g=sh.good,u=price(b,g,false),n=u>=sh.minSell?Math.min(sh.load[g],Math.max(0,capacity(b)-b.stock[g]),Math.floor(b.money/u)):0;unload(b,sh,g,n);b.money-=n*u;a.money+=n*u;u=price(b,sh.buy,true);if(u<=sh.maxBuy){n=load(b,sh,sh.buy,Math.min(sh.buyAmount,Math.floor(a.money/u)));a.money-=n*u;b.money+=n*u;}}sh.stage='return';sh.back=true;}
+ if(sh.stage==='dock'&&sh.mission){let m=sh.mission;sh.status='İhtiyaç siparişi teslim ediliyor';if(b.stock[m.good]+m.amount>capacity(b))return;b.stock[m.good]+=m.amount;sh.load[m.good]-=m.amount;a.money+=m.reward;gainXP(s,sh.owner,'trade');delete sh.mission;sh.stage='return';sh.progress=0;return;}if(sh.stage==='dock'){sh.status='Boşaltma / yükleme';if(++sh.progress<4)return;sh.progress=0;if(c){if(b.stock[c.give]+c.giveN>capacity(b)){sh.status='Hedef depo dolu · takas yükü bekliyor';return;}unload(b,sh,c.give,c.giveN);sh.load[c.receive]+=c.escrow;c.escrow=0;c.status='returning';}else if(b.controller===a.controller&&b.controller!==null){for(let g of goods)unload(b,sh,g);load(b,sh,sh.buy,sh.buyAmount);}else if(b.market&&port(b)){let g=sh.good,u=price(b,g,false),n=u>=sh.minSell?Math.min(sh.load[g],Math.max(0,capacity(b)-b.stock[g]),Math.floor(b.money/u)):0;unload(b,sh,g,n);b.money-=n*u;a.money+=n*u;u=price(b,sh.buy,true);if(u<=sh.maxBuy){n=load(b,sh,sh.buy,Math.min(sh.buyAmount,Math.floor(a.money/u)));a.money-=n*u;b.money+=n*u;}}sh.stage='return';sh.back=true;}
 }
 function tickBase(s){s.tick++;s.islands.forEach(a=>{if(!a.owner)return;productionTick(s,a,s.islands.indexOf(a));if(--a.order.remaining<=0)a.order=order(a);if(s.tick%30===0){const demand=cityTier(a).demand;let food=Math.min(demand.food,a.stock.food),clothes=Math.min(demand.clothes,a.stock.clothes);a.stock.food-=food;a.stock.clothes-=clothes;a.citySupply={food,clothes};a.money+=Math.floor((food*3+clothes*12)*(a.tech.includes('commerce')?1.2:a.tech.includes('council')?1.1:1));}});for(let sh of s.ships)shipTick(s,sh);if(s.mode==='test'&&s.tick%60===0){for(let g of goods)s.trader.stock[g]=Math.min(300,s.trader.stock[g]+10);s.trader.money=Math.min(15000,s.trader.money+200);}}
 export function publicState(s,p,running){return {...s,players:s.players.map(({name,island})=>({name,island})),you:p.island,running}}
@@ -130,7 +167,7 @@ function actDepth(s,p,m){let i=Number.isInteger(m.island)?m.island:p.island,a=s.
 if(!owning(s,p,i))throw Error('Bu ada sana ait değil');if(m.type==='road'){if(!Number.isInteger(m.x)||!Number.isInteger(m.y)||!['grass','forest','rock'].includes(terrain(m.x,m.y,i,a))||occupied(a,m.x,m.y))throw Error('Yola uygun boş kara seç');let k=m.x+','+m.y;if(a.roads.includes(k))throw Error('Yol zaten var');pay(a,{stone:1});a.roads.push(k);return;}
 if(m.type==='buildingUpgrade'){let b=a.plots.find(b=>b.x===m.x&&b.y===m.y);if(!b||!recipes[b.kind]?.out||b.level>=5)throw Error('Yükseltilebilir üretim binası seç (en fazla 5)');pay(a,upgradeBuildingCost(b));b.level=(b.level||1)+1;return;}
 if(i!==p.island&&['research','deliverOrder','offer','reply','trader'].includes(m.type))throw Error('Bu işlemi ana adadan yap');if(i!==p.island&&['ship','route'].includes(m.type))throw Error('Gemiler ana limandan yönetilir');let ownTech=a.tech;a.tech=home.tech;try{actBase(s,{...p,island:i},m)}finally{if(i!==p.island)a.tech=ownTech;}}
-function tickDepth(s){for(let a of s.islands){let home=s.islands[a.controller]||a;for(let b of a.plots){let road=b.path?.length?b.path.filter(p=>a.roads.includes(p.join(','))).length/b.path.length:0;b.roadFactor=1-road*.4;if(b.kind==='koyun')b.roadFactor*=home.tech.includes('husbandry')?.5:home.tech.includes('farming')?.75:1;}if(a.research&&--a.research.remaining<=0){a.tech.push(a.research.id);a.research=null;}}
+function tickDepth(s){for(let a of s.islands){let home=s.islands[a.controller]||a;for(let b of a.plots){let road=b.path?.length?b.path.filter(p=>a.roads.includes(p.join(','))).length/b.path.length:0;b.roadFactor=1-road*.4;if(b.kind==='koyun')b.roadFactor*=home.tech.includes('husbandry')?.5:home.tech.includes('farming')?.75:1;}if(a.research&&--a.research.remaining<=0){a.tech.push(a.research.id);a.research=null;gainXP(s,s.islands.indexOf(a),'research');}}
 let expeditions=s.ships.filter(sh=>sh.expedition);for(let sh of expeditions){sh.status='Koloni seferi · '+sh.expedition.remaining+' sn';if(--sh.expedition.remaining<=0){let a=s.islands[sh.expedition.to];if(!a.owner){a.owner=s.islands[sh.owner].owner+' · Koloni';a.controller=sh.owner;a.market=false;a.stock={...a.stock,wood:40,stone:30,food:20};let found=false;for(let y=0;y<36&&!found;y++)for(let x=0;x<36&&!found;x++)if(terrain(x,y,sh.expedition.to,a)==='coast'){a.plots.push({kind:'liman',x,y,size:1,level:1,phase:0});found=true;}}else{let h=s.islands[sh.owner];for(let [g,n] of Object.entries({wood:60,stone:40,tools:10}))h.stock[g]+=n;h.money+=200;}delete sh.expedition;sh.stage='home';}}
 let saved=s.ships;s.ships=saved.filter(sh=>!sh.expedition);tickBase(s);s.ships=saved;for(let a of s.islands){if(a.owner&&s.tick%30===0){let tool=Math.min(cityTier(a).demand.tools,a.stock.tools);a.stock.tools-=tool;a.money+=tool*18;if(a.citySupply.food===cityTier(a).demand.food)a.rp++;a.citySupply.tools=tool;}for(let b of a.plots){let r=recipes[b.kind];if(!r?.out)continue;b.rate=60*(1+a.productionLevel)/cycleLength(b);b.status=b.path&&b.path.length===0?'Kaynağa yol yok':a.stock[r.out]>=capacity(a)?'Depo dolu':!Object.entries(r.inputs||(r.input?{[r.input]:1}:{})).every(([g,n])=>(b.inventory?.[g]||0)>=n*(1+a.productionLevel))?'Atlı hammadde teslimatı bekleniyor':'Çalışıyor';}}
 }
@@ -263,6 +300,7 @@ export function migrate(old){
   const world=migrateMechanics11(old);
   world.islands.forEach((island,index)=>{
     economyInit(world,island,index);
+    island.playerProgress ??= {level:1,xp:0,goldEarned:0};
     if(island.ai && !island.basicIndustryReady){
       establishAIIndustry(island,index);
       initializeMechanics(world,island,index);
@@ -299,6 +337,7 @@ function upgradeCity(world, player, index, level){
   if(!next || level!==island.cityLevel+1)throw Error('Şehir kademesi değişti');
   pay(island,next.cost);
   island.cityLevel++;
+  gainXP(world,player.island,'cityUpgrade');
   syncLocations(island);
 }
 

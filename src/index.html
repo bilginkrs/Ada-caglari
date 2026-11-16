@@ -97,11 +97,17 @@
   #research-points-bar{font-size:.8rem;padding:4px}
   #trade-notice{top:162px}
 }
-</style><header><div><small>ARAŞTIRMA VE TAKAS · 1.6</small><h1>Ada Çağları</h1></div><div id="status">Birlikte bir dünya kurun.</div></header>
+#player-level{flex:0 0 auto;align-self:center;display:grid;gap:2px;min-width:74px;min-height:44px;text-align:center;padding:4px 7px;line-height:1.1;background:#f5e6ad;border-color:#ad8d47}
+#player-level progress,#level-details-meter{display:block;width:100%;height:7px;accent-color:#63824b}
+#player-level small{color:#614b29;white-space:nowrap}
+#level-details-meter{height:11px}
+#level-summary{display:flex;align-items:baseline;justify-content:space-between;gap:7px}
+@media(max-width:680px){#player-level{min-width:59px}#player-level small{font-size:.68rem}}
+</style><header><div><small>ADA USTALIĞI · 1.7</small><h1>Ada Çağları</h1></div><div id="status">Birlikte bir dünya kurun.</div></header>
 <section id="lobby"><h2>İki kıyı, ortak bir hikâye.</h2><p>Ortak dünyada ikiniz de bağlıyken zaman ilerler. Test dünyasında tek başına oynayabilirsin.</p><input id="name" placeholder="Oyuncu adı" maxlength="24"><input id="room" placeholder="Ortak oda kodu"><button id="join">Birlikte oyna</button> <button id="invite">Davet bağlantısını kopyala</button><p><button id="solo">Tek başına test et</button></p><small>Test ilerlemesi ayrı kaydedilir.</small><p id="hint"></p></section>
 <main id="game" hidden><nav id="toolbar"><button id="menu">Menü</button><button id="world">Adalar</button><button id="home">Adam</button><button id="upgrades">Geliştirmeler</button><button id="storage">▣ Depo</button><button id="transport">Taşıma filosu</button></nav><div id="stockbar" aria-label="Temel stoklar"></div><canvas id="canvas"></canvas><aside id="panel" hidden><div class="panel-heading"><button id="close" aria-label="Paneli kapat">×</button><button id="panelBack" hidden>← Geri</button><h2 id="heading"></h2></div><div id="content"></div></aside><div id="toast" role="status" hidden></div><section id="trade-notice" aria-label="Takas bildirimleri" hidden><button id="trade-notice-toggle" aria-controls="trade-notice-list" aria-expanded="false">Takas teklifleri</button><div id="trade-notice-list" aria-live="polite" hidden></div></section></main>
 <script type="module">
-import {terrain as terrainAt, fertility, land, capacity, upgradeCost, technologies, occupied, workPath, cycleLength, pay, validBuild, price, loadCount, upgradeBuildingCost, horsePrice, CATEGORIES, technologies as treeData, mineralChoices, basePrices, nearWater, cityTier, cityTiers, transportStats, productionSources, recipes} from '/logic.js?v=16';
+import {terrain as terrainAt, fertility, land, capacity, upgradeCost, technologies, occupied, workPath, cycleLength, pay, validBuild, price, loadCount, upgradeBuildingCost, horsePrice, CATEGORIES, technologies as treeData, mineralChoices, basePrices, nearWater, cityTier, cityTiers, transportStats, productionSources, recipes, progressionXP, xpForNextLevel, levelReward} from '/logic.js?v=17';
 function terrain(x,y){return terrainAt(x,y,selected,state?.islands[selected])}
 const names={engines:'Motor',tin:'Kalay',silver:'Gümüş',bronze:'Bronz',silverware:'Gümüş eşya',tools:'Alet',wood:'Odun',stone:'Taş',food:'Yiyecek',wool:'Yün',yarn:'İplik',clothes:'Kıyafet',iron:'Demir',copper:'Bakır',coal:'Kömür',steel:'Çelik',machines:'Makine'},labels={motorAtolyesi:'Motor atölyesi',bronz:'Bronz dökümhanesi',gumusisleme:'Gümüş atölyesi',demirci:'Demirci',oduncu:'Oduncu',tas:'Taş ocağı',balik:'Balıkçı',koyun:'Koyun çiftliği',iplik:'İplikhane',terzi:'Terzi',demir:'Demir madeni',bakir:'Bakır madeni',liman:'Liman',komur:'Kömür madeni',celik:'Çelik atölyesi',makine:'Makine atölyesi'},terrainNames={grass:'Çayır',forest:'Orman',rock:'Kayalık',mountain:'Dağ',lake:'Göl',coast:'Kıyı',city:'Şehir',sea:'Deniz'};
 const el=id=>document.getElementById(id),canvas=el('canvas'),ctx=canvas.getContext('2d');let receivedAt=0;let ws,state,selected=0,view='island',zoom=1,pan={x:0,y:0},pick=null,panelMode=null,W=1000,H=700,anim=0,lastFrame=0;
@@ -114,7 +120,11 @@ function say(message){
   clearTimeout(toastTimer);
   toastTimer=setTimeout(()=>{toast.hidden=true;},3500);
 }function send(m){if(state&&['build','move','demolish','road','buildingUpgrade','storageUpgrade','productionUpgrade','colonize','buyHorse','extract'].includes(m.type))m.island=selected;if(ws?.readyState===1)ws.send(JSON.stringify(m));else say('Bağlantı yok. Yeniden katıl.');}
-function connect(mode){if(!el('name').value.trim()){el('hint').textContent='Adını yaz.';return;}let room=mode==='test'?(localStorage.adaTestRoom||(localStorage.adaTestRoom=crypto.randomUUID())):el('room').value;if(mode!=='test')localStorage.adaRoom=room;localStorage.adaName=el('name').value;history.replaceState(null,'',mode==='test'?'?mode=test':'?room='+encodeURIComponent(room));if(ws)ws.close();state=null;pick=null;panelMode=null;el('panel').hidden=true;let socket=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/api?room='+encodeURIComponent(room)+'&mode='+mode);ws=socket;socket.onopen=()=>socket.send(JSON.stringify({type:'join',token,name:el('name').value}));socket.onmessage=e=>{if(ws!==socket)return;let m=JSON.parse(e.data);if(m.error){say(m.error);el('hint').textContent=m.error;return;}if(m.ack){panelSignature='';extraSignature='';if(m.ack==='save'){rememberWorld(m.savedAt);say('Oyun kaydedildi · '+new Date(m.savedAt).toLocaleTimeString('tr-TR'));}else say('İşlem tamamlandı.');return;}let first=!state;state=m;receivedAt=performance.now();updateStockbar();if(first){selected=m.you;view='island';el('lobby').hidden=true;el('game').hidden=false;resize();focus(6,6);rememberWorld();}el('status').textContent=(m.mode==='test'?'TEST · ':'ORTAK · ')+(m.running?'Dünya ilerliyor':'Duraklatıldı · Oyuncu bekleniyor')+' · '+m.tick+' sn · Altın: '+m.islands[m.you].money;refreshPanel();updateBarterNotice(first);};socket.onclose=()=>{if(ws!==socket)return;if(state)state.running=false;el('status').textContent='Bağlantı kesildi. Yeniden katıl.';el('game').hidden=true;el('lobby').hidden=false;};}
+function connect(mode){if(!el('name').value.trim()){el('hint').textContent='Adını yaz.';return;}let room=mode==='test'?(localStorage.adaTestRoom||(localStorage.adaTestRoom=crypto.randomUUID())):el('room').value;if(mode!=='test')localStorage.adaRoom=room;localStorage.adaName=el('name').value;history.replaceState(null,'',mode==='test'?'?mode=test':'?room='+encodeURIComponent(room));if(ws)ws.close();state=null;pick=null;panelMode=null;el('panel').hidden=true;let socket=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/api?room='+encodeURIComponent(room)+'&mode='+mode);ws=socket;socket.onopen=()=>socket.send(JSON.stringify({type:'join',token,name:el('name').value}));socket.onmessage=e=>{if(ws!==socket)return;let m=JSON.parse(e.data);if(m.error){say(m.error);el('hint').textContent=m.error;return;}if(m.ack){panelSignature='';extraSignature='';if(m.ack==='save'){rememberWorld(m.savedAt);say('Oyun kaydedildi · '+new Date(m.savedAt).toLocaleTimeString('tr-TR'));}else say('İşlem tamamlandı.');return;}let first=!state;const previousProgress=state?.islands[m.you]?.playerProgress;state=m;receivedAt=performance.now();updateStockbar();if(first){selected=m.you;view='island';el('lobby').hidden=true;el('game').hidden=false;resize();focus(6,6);rememberWorld();}el('status').textContent=(m.mode==='test'?'TEST · ':'ORTAK · ')+(m.running?'Dünya ilerliyor':'Duraklatıldı · Oyuncu bekleniyor')+' · '+m.tick+' sn · Altın: '+m.islands[m.you].money;refreshPanel();updateBarterNotice(first);
+const progress=m.islands[m.you].playerProgress;
+if(previousProgress&&progress&&progress.level>previousProgress.level){
+ say('Seviye '+progress.level+' · +'+(progress.goldEarned-previousProgress.goldEarned)+' altın');
+}};socket.onclose=()=>{if(ws!==socket)return;if(state)state.running=false;el('status').textContent='Bağlantı kesildi. Yeniden katıl.';el('game').hidden=true;el('lobby').hidden=false;};}
 el('join').onclick=()=>connect('coop');el('solo').onclick=()=>connect('test');el('invite').onclick=async()=>{let url=location.origin+'/?room='+encodeURIComponent(el('room').value);try{await navigator.clipboard.writeText(url);el('hint').textContent='Davet bağlantısı kopyalandı.'}catch{el('hint').textContent=url}};
 function leaveGame(){const old=ws;ws=null;old?.close();state=null;el('game').hidden=true;el('lobby').hidden=false;history.replaceState(null,'',location.pathname);el('status').textContent='Birlikte veya test modunda oyna.'}setInterval(()=>{if(document.visibilityState==='visible'&&ws?.readyState===1)send({type:'ping'})},2000);document.addEventListener('visibilitychange',()=>{if(document.hidden)ws?.close()});addEventListener('pagehide',()=>ws?.close());
 const svgParts={wood:'<path fill="#8c5738" d="M4 10h23v15H4z"/><circle cx="5" cy="17" r="7" fill="#d3a365"/><circle cx="5" cy="17" r="4" fill="none" stroke="#855638"/><path stroke="#bd8752" d="M12 13h13M13 20h13"/>',stone:'<path fill="#a7b3b5" d="m3 24 4-14 12-5 10 13-5 9H8z"/><path fill="#697d84" d="m19 5-3 14 8 8 5-9z"/>',food:'<path fill="#dba749" d="M3 23C1 7 28 4 29 23v4H3z"/><path stroke="#f6d18b" stroke-width="3" d="m9 13 3 8m5-10 3 9"/>',wool:'<path fill="#ede9d9" d="M8 26C-3 22 3 13 7 12 5 2 18 1 21 8c12-2 13 13 5 15-4 8-13 8-18 3"/>',yarn:'<circle fill="#d4a69e" cx="16" cy="16" r="12"/><path fill="none" stroke="#916b72" d="m7 8 18 15M4 15l18 11M11 5l17 14M10 27l12-22"/>',clothes:'<path fill="#7db8c4" d="m10 4-8 7 5 7 4-3v13h12V15l4 3 4-7-8-7-6 4z"/>',iron:'<path fill="#899fad" d="m3 20 6-12h17l4 12-7 6H6z"/><path fill="#c5d7dc" d="m9 8 3 12h18L26 8z"/>',copper:'<path fill="#b36b43" d="m3 20 6-12h17l4 12-7 6H6z"/><path fill="#e3a16b" d="m9 8 3 12h18L26 8z"/>'};
@@ -153,7 +163,7 @@ el('close').onclick=()=>{
   panelHistory.length=0;
 };
 el('storage').onclick=()=>openPanel('storage');el('upgrades').onclick=()=>openPanel('upgrades');
-let panelSignature="";function refreshPanel(){if(!state||!panelMode)return;if(panelMode==='tech'||panelMode==='logistics'){technologyPanel(panelMode==='logistics');return;}if(panelMode==='recipe'){renderRecipe();return;}if(extraPanel())return;if(panelMode==='tile'&&pick){
+let panelSignature="";function refreshPanel(){if(!state||!panelMode)return;if(panelMode==='playerLevel'){levelPanel();return;}if(panelMode==='tech'||panelMode==='logistics'){technologyPanel(panelMode==='logistics');return;}if(panelMode==='recipe'){renderRecipe();return;}if(extraPanel())return;if(panelMode==='tile'&&pick){
   const island=state.islands[selected];
   const building=occupied(island,pick.x,pick.y);
   if(building&&recipes[building.kind]?.out){
@@ -258,6 +268,14 @@ function updateStockbar(){
     const points=text(bar,'','span');
     points.id='research-points-bar';
     points.title='Araştırma puanı';
+    const level=button(bar,'',()=>openSubPanel('playerLevel'));
+    level.id='player-level';
+    text(level,'','strong').id='level-badge-title';
+    text(level,'','small').id='level-badge-xp';
+    const meter=document.createElement('progress');
+    meter.id='level-badge-meter';
+    meter.setAttribute('aria-label','Seviye ilerlemesi');
+    level.append(meter);
     const research=button(bar,'',()=>{
       selectedTechnology=state.islands[state.you].research?.id;
       openPanel('tech');
@@ -270,6 +288,7 @@ function updateStockbar(){
   el('stock-gold').textContent=island.money;
   el('research-points-bar').textContent='⚗ '+state.islands[state.you].rp+' AP';
   el('research-points-bar').setAttribute('aria-label','Araştırma puanı: '+state.islands[state.you].rp);
+  updateLevelBadge(state.islands[state.you]);
   const research=state.islands[state.you].research;
   const indicator=el('active-research');
   indicator.hidden=!research;
@@ -1003,4 +1022,51 @@ el('trade-notice-toggle').onclick=()=>{
   updateBarterNotice(false);
 };
 
+
+function currentProgress(island){
+  return island.playerProgress||{level:1,xp:0,goldEarned:0};
+}
+
+function updateLevelBadge(island){
+  const {level,xp}=currentProgress(island);
+  const goal=xpForNextLevel(level);
+  el('level-badge-title').textContent='Seviye '+level;
+  el('level-badge-xp').textContent=xp+'/'+goal+' XP';
+  const meter=el('level-badge-meter');
+  meter.max=goal;
+  meter.value=xp;
+  el('player-level').setAttribute('aria-label','Oyuncu seviyesi '+level+', '+xp+' / '+goal+' deneyim puanı');
+}
+
+function levelPanel(){
+  const {level,xp,goldEarned}=currentProgress(state.islands[state.you]);
+  const signature='progress:'+level+':'+xp+':'+goldEarned;
+  if(signature===panelSignature)return;
+  panelSignature=signature;
+  el('heading').textContent='Oyuncu seviyesi';
+  const content=el('content');
+  content.replaceChildren();
+  const goal=xpForNextLevel(level);
+  const summary=document.createElement('div');
+  summary.id='level-summary';
+  text(summary,'Seviye '+level,'h3');
+  text(summary,xp+' / '+goal+' XP','strong');
+  content.append(summary);
+  const meter=document.createElement('progress');
+  meter.id='level-details-meter';
+  meter.max=goal;
+  meter.value=xp;
+  meter.setAttribute('aria-label','Bir sonraki seviyeye ilerleme');
+  content.append(meter);
+  text(content,'Seviye '+(level+1)+' ödülü · +'+levelReward(level+1)+' altın','h3');
+  text(content,'Seviyelerden kazandığın toplam altın · '+goldEarned);
+  const activities=document.createElement('ul');
+  for(const [label,activity] of [
+    ['Şehir siparişi teslimi','cityOrder'],
+    ['Araştırma tamamlama','research'],
+    ['Şehir yükseltme','cityUpgrade'],
+    ['Liman alımı, takas veya ticaret siparişi tamamlama','trade']
+  ])text(activities,label+' · +'+progressionXP[activity]+' XP','li');
+  content.append(activities);
+}
 </script></html>
