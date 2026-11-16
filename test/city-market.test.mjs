@@ -35,9 +35,11 @@ test('A stale or unaffordable city upgrade cannot consume materials; the new tie
 
 test('Port purchase reserves the advertised lot and total gold, survives a reload, and settles only once',()=>{
   let {world,buyer,seller,players,ship}=setup();
+  const wood=seller.stock.wood;
   act(world,players[1],{type:'setListing',good:'wood',quantity:10,gold:5});
+  assert.equal(seller.stock.wood,wood-10);
   const {id}=seller.listings.wood;
-  const cash=buyer.money,sellerCash=seller.money,wood=seller.stock.wood;
+  const cash=buyer.money,sellerCash=seller.money;
   act(world,players[0],{type:'buyListing',target:1,id});
   assert.equal(buyer.money,cash-5);
   assert.equal(seller.money,sellerCash);
@@ -70,4 +72,52 @@ test('Motor logistics requires late research and its engine has a multi-input re
   assert.ok(technologies.motorTransport.requires.includes('combustion'));
   assert.ok(technologies.combustion.requires.includes('industry'));
   assert.equal(productionSources('engines')[0].inputs.steel,3);
+});
+
+test('Each five-minute shortage loses population, can shrink the city, and ends when all needs are met',()=>{
+  const {world,buyer}=setup();
+  buyer.cityLevel=1;
+  buyer.cityPopulation=120;
+  const funded=buyer.money;
+  function advanceTo(target, supply) {
+    while(world.tick<target){
+      if((world.tick+1)%30===0)Object.assign(buyer.stock,supply);
+      tick(world);
+    }
+  }
+  const shortage={food:9,wood:3,stone:2,clothes:2,tools:0};
+  advanceTo(30,shortage);
+  assert.equal(buyer.cityShortageUntil,330);
+  assert.equal(buyer.citySupply.wood,3);
+  assert.equal(buyer.citySupply.stone,2);
+  assert.equal(buyer.stock.wood,0);
+  assert.equal(buyer.stock.stone,0);
+  advanceTo(329,shortage);
+  assert.equal(buyer.cityPopulation,120);
+  advanceTo(330,shortage);
+  assert.equal(buyer.cityPopulation,108);
+  assert.equal(buyer.cityShortageUntil,630);
+  advanceTo(930,shortage);
+  assert.equal(buyer.cityLevel,0);
+  assert.equal(buyer.cityPopulation,50);
+  advanceTo(960,{...shortage,tools:1});
+  assert.equal(buyer.cityShortageUntil,null);
+  assert.equal(buyer.money,funded);
+});
+
+test('Updating a listing retains its reserved stock and cancelling returns the lot',()=>{
+  let {world,seller,players}=setup();
+  const wood=seller.stock.wood;
+  const listing={type:'setListing',good:'wood',quantity:10,gold:5};
+  act(world,players[1],listing);
+  assert.equal(seller.stock.wood,wood-10);
+  act(world,players[1],{...listing,quantity:15});
+  assert.equal(seller.stock.wood,wood-15);
+  assert.throws(()=>act(world,players[1],{...listing,quantity:41}));
+  assert.equal(seller.listings.wood.quantity,15);
+  world=migrate(structuredClone(world));
+  seller=world.islands[1];
+  act(world,players[1],{type:'removeListing',good:'wood'});
+  assert.equal(seller.stock.wood,wood);
+  assert.equal(seller.listings.wood,undefined);
 });

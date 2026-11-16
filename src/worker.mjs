@@ -4,9 +4,31 @@ export default {async fetch(req,env){const u=new URL(req.url);if(u.pathname==='/
 export class World{
  constructor(ctx){this.ctx=ctx;this.sockets=new Map;this.tail=Promise.resolve();ctx.blockConcurrencyWhile(async()=>{let old=await ctx.storage.get('world');if(old&&old.version!==6&&!await ctx.storage.get('backup-before-v06'))await ctx.storage.put('backup-before-v06',old);if(old&&!old.mechanicsVersion&&!await ctx.storage.get('backup-before-mechanics11'))await ctx.storage.put('backup-before-mechanics11',old);if(old&&old.islands?.some(a=>a.economyVersion!==2)&&!await ctx.storage.get('backup-before-warehouse12'))await ctx.storage.put('backup-before-warehouse12',old);this.s=migrate(old);this.initialized=!!old;});}
  queue(fn){const p=this.tail.then(fn);this.tail=p.catch(()=>{});return p;}
- active(){return this.s.players.length===(this.s.mode==='test'?1:2)&&this.s.players.every(p=>[...this.sockets.values()].some(v=>v.token===p.token&&Date.now()-v.last<7000));}
+ active(){return this.s.players.length===(this.s.mode==='test'?1:2)&&this.s.players.every(p=>[...this.sockets.values()].some(v=>v.token===p.token&&Date.now()-v.last<12000));}
  send(){for(const [ws,p] of this.sockets)try{ws.send(JSON.stringify(publicState(this.s,p,this.active())))}catch{this.sockets.delete(ws)}}
- async fetch(req){if(req.headers.get('Upgrade')?.toLowerCase()!=='websocket')return new Response('WebSocket required',{status:426});const mode=new URL(req.url).searchParams.get('mode')==='test'?'test':'coop';if(this.initialized&&this.s.mode&&this.s.mode!==mode)return new Response('Oda modu uyuşmuyor',{status:409});this.s.mode=mode;this.initialized=true;const pair=new WebSocketPair,ws=pair[1];ws.accept();ws.addEventListener('message',e=>{this.queue(async()=>{try{if(typeof e.data!=='string'||e.data.length>8192)throw Error('Geçersiz mesaj');const m=JSON.parse(e.data);if(m.type==='join'){if(!/^[a-f0-9-]{36}$/.test(m.token))throw Error('Geçersiz kimlik');let p=this.s.players.find(p=>p.token===m.token);if(!p){if(this.s.players.length>=(this.s.mode==='test'?1:2))throw Error('Oda dolu');p={token:m.token,name:String(m.name||'Oyuncu').trim().slice(0,24)||'Oyuncu',island:this.s.players.length};this.s.players.push(p);this.s.islands[p.island].owner=p.name;this.s.islands[p.island].ownerId=p.island;this.s.islands[p.island].controller=p.island;}for(let [other,v] of this.sockets)if(v.token===p.token&&other!==ws){this.sockets.delete(other);other.close(1000,'Başka sekmede açıldı');}this.sockets.set(ws,{...p,last:Date.now()});await this.ctx.storage.put('world',this.s);await this.ctx.storage.setAlarm(Date.now()+1000);}
+ async fetch(req){if(req.headers.get('Upgrade')?.toLowerCase()!=='websocket')return new Response('WebSocket required',{status:426});const mode=new URL(req.url).searchParams.get('mode')==='test'?'test':'coop';if(this.initialized&&this.s.mode&&this.s.mode!==mode)return new Response('Oda modu uyuşmuyor',{status:409});this.s.mode=mode;this.initialized=true;const pair=new WebSocketPair,ws=pair[1];ws.accept();ws.addEventListener('message',e=>{
+ const peer=this.sockets.get(ws);
+ if(peer&&e.data==='{"type":"ping"}'){peer.last=Date.now();return;}
+ this.queue(async()=>{try{if(typeof e.data!=='string'||e.data.length>8192)throw Error('Geçersiz mesaj');const m=JSON.parse(e.data);if(m.type==='join'){if(!/^[a-f0-9-]{36}$/.test(m.token))throw Error('Geçersiz kimlik');let p=this.s.players.find(p=>p.token===m.token);if(!p){if(this.s.players.length>=(this.s.mode==='test'?1:2))throw Error('Oda dolu');p={token:m.token,name:String(m.name||'Oyuncu').trim().slice(0,24)||'Oyuncu',island:this.s.players.length};this.s.players.push(p);this.s.islands[p.island].owner=p.name;this.s.islands[p.island].ownerId=p.island;this.s.islands[p.island].controller=p.island;}for(let [other,v] of this.sockets)if(v.token===p.token&&other!==ws){this.sockets.delete(other);other.close(1000,'Başka sekmede açıldı');}this.sockets.set(ws,{...p,last:Date.now()});await this.ctx.storage.put('world',this.s);await this.ctx.storage.setAlarm(Date.now()+1000);}
  else{let p=this.sockets.get(ws);if(!p)throw Error('Önce katılın');if(m.type==='ping'){p.last=Date.now();return;}if(m.type==='save'){this.s.savedAt=Date.now();await this.ctx.storage.put('savedCheckpoint',this.s);await this.ctx.storage.put('world',this.s);ws.send(JSON.stringify({ack:'save',savedAt:this.s.savedAt}));this.send();return;}if(!this.active()&&m.type!=='configureAI')throw Error('Dünya duraklatıldı; tüm oyuncular bağlı olmalı');const next=structuredClone(this.s);act(next,p,m);await this.ctx.storage.put('world',next);this.s=next;ws.send(JSON.stringify({ack:m.type}));}this.send();}catch(err){try{ws.send(JSON.stringify({error:err.message}))}catch{}}});});const close=()=>{this.sockets.delete(ws);this.send()};ws.addEventListener('close',close);ws.addEventListener('error',close);return new Response(null,{status:101,webSocket:pair[0]});}
- async alarm(){await this.queue(async()=>{if(this.active()){let next=structuredClone(this.s);tick(next);await this.ctx.storage.put('world',next);this.s=next;}for(let [ws,p] of this.sockets)if(Date.now()-p.last>15000){this.sockets.delete(ws);try{ws.close(1000,'Bağlantı zaman aşımı')}catch{}}this.send();if(this.sockets.size)await this.ctx.storage.setAlarm(Date.now()+1000);});}
+ async alarm(){
+   const started=Date.now();
+   await this.queue(async()=>{
+     for(const [ws,peer] of this.sockets){
+       if(Date.now()-peer.last<=20000)continue;
+       this.sockets.delete(ws);
+       try{ws.close(1000,'Bağlantı zaman aşımı')}catch{}
+     }
+     const running=this.active();
+     if(running){
+       const next=structuredClone(this.s);
+       tick(next);
+       await this.ctx.storage.put('world',next);
+       this.s=next;
+     }
+     if(running||running!==this.lastAlarmRunning)this.send();
+     this.lastAlarmRunning=running;
+     if(this.sockets.size)await this.ctx.storage.setAlarm(Math.max(started+1000,Date.now()+50));
+   });
+ }
 }
