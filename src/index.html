@@ -42,6 +42,8 @@
 .voyage-track .voyage-ship{position:absolute;top:-24px;left:var(--voyage-progress);transform:translateX(-50%);height:34px;width:34px;transition:left .65s linear}
 .voyage-phases{display:flex;justify-content:space-between;gap:4px;font-size:.82rem}
 .voyage-status{margin-bottom:0}
+#panel.tech{top:125px}
+#panel #close{position:sticky;top:0;z-index:2}
 #panel.tech #content{display:flex;align-items:start;gap:14px}
 .technology-graph{flex:1 1 0;min-width:0}
 .technology-details{position:sticky;top:0;flex:0 0 min(33%,310px);background:#f5e5b9;padding:12px;border:1px solid #c4a773;border-radius:7px}
@@ -245,7 +247,7 @@ function technologyPanel(logisticsOnly=false){
         selectedTechnology=id;
         techSignature='';
         technologyPanel(logisticsOnly);
-        el('technology-details').scrollIntoView({block:'nearest'});
+        if(matchMedia('(max-width:850px)').matches)el('technology-details').scrollIntoView({block:'start'});
       });
       control.className='technology-node';
       control.dataset.tech=id;
