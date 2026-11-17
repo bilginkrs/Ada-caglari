@@ -18,7 +18,29 @@ export function resourceTarget(kind,t){return kind==='oduncu'?t==='forest':kind=
 export function workPath(b,island=0,a={plots:[],roads:[]}){if(!['oduncu','tas','demir','bakir','komur'].includes(b.kind))return null;return weightedPath(a,island,{x:b.x,y:b.y},(x,y)=>resourceTarget(b.kind,terrain(x,y,island,a))&&!occupied(a,x,y),[b]);}
 export function cycleLength(b){return Math.max(2,Math.ceil((b.path?Math.max(1,b.path.length-1)*2+4:b.kind==='koyun'?Math.max(2,Math.round(4*100/(b.fertility||100))):4)/(1+.25*((b.level||1)-1))*(b.roadFactor||1)));}
 export function pay(a,cost){for(let [g,n] of Object.entries(cost))if((a.stock[g]||0)<n)throw Error('Yetersiz malzeme');for(let [g,n] of Object.entries(cost))a.stock[g]-=n;}
-export function validBuild(a,kind,x,y,i=0){if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>35||y>35)throw Error('Ada üzerinde bir kare seç.');const size=kind==='koyun'?2:1;for(let dx=0;dx<size;dx++)for(let dy=0;dy<size;dy++){let tx=x+dx,ty=y+dy;if(tx>35||ty>35)throw Error('Çiftlik için 2×2 boş kare gerekli.');if(tx===26&&ty===26)throw Error('Bu kare ada deposuna ayrılmış');if(occupied(a,tx,ty))throw Error('Bu alan dolu.');const t=terrain(tx,ty,i,a);if(kind==='balik'){if(['sea','lake','mountain','city'].includes(t)||!nearWater(a,i,tx,ty))throw Error('Balıkçı deniz veya tatlı su kıyısında olmalı');}else if(kind==='liman'){if(t!=='coast')throw Error('Limanı kıyıya kur.');}else if(['sea','lake','mountain','city','coast'].includes(t))throw Error('Bu arazi inşaata uygun değil.');}}
+export function depotContains(island,x,y){
+  const yard=island.depot?.yard??{x:25,y:25};
+  return x>=yard.x&&x<yard.x+2&&y>=yard.y&&y<yard.y+2;
+}
+
+function prepareDepot(island,index){
+  const depot=island.depot;
+  if(!depot.yard){
+    const candidates=[];
+    for(let x=0;x<35;x++)for(let y=0;y<35;y++)candidates.push({x,y});
+    candidates.sort((a,b)=>Math.abs(a.x+1-depot.x)+Math.abs(a.y+1-depot.y)-
+      Math.abs(b.x+1-depot.x)-Math.abs(b.y+1-depot.y));
+    depot.yard=candidates.find(({x,y})=>[[x,y],[x+1,y],[x,y+1],[x+1,y+1]].every(([tx,ty])=>
+      ['grass','forest','rock'].includes(terrain(tx,ty,index,island))&&!occupied(island,tx,ty)));
+    if(depot.yard){
+      depot.x=depot.yard.x+1;
+      depot.y=depot.yard.y+1;
+    }
+  }
+  depot.waiting ||= {};
+}
+
+export function validBuild(a,kind,x,y,i=0){if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>35||y>35)throw Error('Ada üzerinde bir kare seç.');const size=kind==='koyun'?2:1;for(let dx=0;dx<size;dx++)for(let dy=0;dy<size;dy++){let tx=x+dx,ty=y+dy;if(tx>35||ty>35)throw Error('Çiftlik için 2×2 boş kare gerekli.');if(depotContains(a,tx,ty))throw Error('Bu kare ada deposuna ayrılmış');if(occupied(a,tx,ty))throw Error('Bu alan dolu.');const t=terrain(tx,ty,i,a);if(kind==='balik'){if(['sea','lake','mountain','city'].includes(t)||!nearWater(a,i,tx,ty))throw Error('Balıkçı deniz veya tatlı su kıyısında olmalı');}else if(kind==='liman'){if(t!=='coast')throw Error('Limanı kıyıya kur.');}else if(['sea','lake','mountain','city','coast'].includes(t))throw Error('Bu arazi inşaata uygun değil.');}}
 export const goods=['wood','stone','food','wool','yarn','clothes','iron','copper','coal','steel','machines','tools'];
 export const recipes={demirci:{out:'tools',inputs:{iron:2,wood:1},tech:'mining'},komur:{out:'coal',tech:'mining'},celik:{out:'steel',inputs:{iron:2,coal:1},tech:'steel'},makine:{out:'machines',inputs:{steel:3,copper:2},tech:'machinery'},liman:{},oduncu:{out:'wood'},tas:{out:'stone'},balik:{out:'food'},koyun:{out:'wool'},iplik:{out:'yarn',input:'wool'},terzi:{out:'clothes',inputs:{yarn:2}},demir:{out:'iron'},bakir:{out:'copper'}};
 export const basePrices={wood:3,stone:4,food:4,wool:5,yarn:8,clothes:14,iron:9,copper:10,coal:7,steel:24,machines:65,tools:22};
@@ -279,8 +301,8 @@ function expandAI(island,index){
   if(island.plots.length<24)aiBuild(island,index,sequence[island.plots.length%sequence.length]);
 }
 function migratePrevious(old){let s=migrateDepth(old);s.nextBuildingId ||=1;s.islands.forEach(a=>{a.deliveries ||= [];for(let b of a.plots){b.id ||= 'b'+s.nextBuildingId++;b.inventory ||= {};}});addAI(s);return s}
-export function tick(s){s.nextBuildingId ||=1;for(let [i,a] of s.islands.entries()){initializeMechanics(s,a,i);economyInit(s,a,i);syncLocations(a);advanceDeliveries(s,a,i);dispatchDeliveries(s,a,i);if(a.owner&&s.tick%180===0){a.needs={food:20,clothes:10,tools:8};if(a.ai)seedMarket(s,a);}if(a.ai&&s.tick%30===0)expandAI(a,i);
-}tickDepth(s);for(let sh of s.ships){let a=s.islands[sh.owner];if(a)sh.capacity=seaCapacity(a);}for(let a of s.islands){syncLocations(a);for(let b of a.plots){if(b.kind==='balik'&&!nearWater(a,s.islands.indexOf(a),b.x,b.y))b.status='Balıkçı su kenarında olmalı';else if(Object.values(b.output||{}).some(n=>n>=50))b.status='Tesis çıkışı dolu · At bekleniyor';b.recent=(b.recent||[]).filter(e=>s.tick-e.tick<60);b.actual=b.recent.reduce((n,e)=>n+e.amount,0);if(b.worker){b.status=stageLabel(b.worker.stage);let walk=(b.path||[]).slice(1).reduce((n,p)=>n+(a.roads.includes(p.join(','))?.5:1),0);b.rate=60*(1+a.productionLevel)/Math.max(1,walk*2+Math.ceil(4/(1+.25*((b.level||1)-1)))+1);}}}}
+export function tick(s){s.nextBuildingId ||=1;for(let [i,a] of s.islands.entries()){initializeMechanics(s,a,i);economyInit(s,a,i);syncLocations(a);drainDepot(a);advanceDeliveries(s,a,i);dispatchDeliveries(s,a,i);if(a.owner&&s.tick%180===0){a.needs={food:20,clothes:10,tools:8};if(a.ai)seedMarket(s,a);}if(a.ai&&s.tick%30===0)expandAI(a,i);
+}tickDepth(s);updateTimedRewards(s);for(let sh of s.ships){let a=s.islands[sh.owner];if(a)sh.capacity=seaCapacity(a);}for(let a of s.islands){syncLocations(a);for(let b of a.plots){if(b.kind==='balik'&&!nearWater(a,s.islands.indexOf(a),b.x,b.y))b.status='Balıkçı su kenarında olmalı';else if(Object.values(b.output||{}).some(n=>n>=50))b.status='Tesis çıkışı dolu · At bekleniyor';b.recent=(b.recent||[]).filter(e=>s.tick-e.tick<60);b.actual=b.recent.reduce((n,e)=>n+e.amount,0);if(b.worker){b.status=stageLabel(b.worker.stage);let walk=(b.path||[]).slice(1).reduce((n,p)=>n+(a.roads.includes(p.join(','))?.5:1),0);b.rate=60*(1+a.productionLevel)/Math.max(1,walk*2+Math.ceil(4/(1+.25*((b.level||1)-1)))+1);}}}}
 
 function actPrevious(s,p,m){let a=s.islands[Number.isInteger(m.island)?m.island:p.island],b=m.type==='demolish'&&a?.plots.find(b=>b.x===m.fromX&&b.y===m.fromY),inv=b?{...b.inventory}:{};if(b)for(let [g,n] of Object.entries(inv))if(a.stock[g]+n+(demolitionRefund(b)[g]||0)>capacity(a))throw Error('Tesisin hammaddelerini iade etmek için depoda yer aç');actDepth(s,p,m);if(b)for(let [g,n] of Object.entries(inv))a.stock[g]+=n;}
 const pathSteps=[[1,0],[-1,0],[0,1],[0,-1]];
@@ -336,7 +358,7 @@ export function weightedPath(island,index,from,goal,allow=[]){
 
 const inputsOf=b=>recipes[b.kind]?.inputs||(recipes[b.kind]?.input?{[recipes[b.kind].input]:1}:{});
 export const stageLabel=stage=>({out:'Kaynağa gidiyor',work:'Kaynakta çalışıyor',back:'Yükle dönüyor',deliver:'Teslim ediyor',blocked:'Yol / kaynak bekliyor',waiting:'Hammadde bekliyor',full:'Depo dolu'}[stage]||stage);
-function initializeMechanics(s,a,i){a.deliveries ||= [];a.depot ||= {x:26,y:26,stock:{...a.stock}};for(let b of a.plots){b.id ||= 'b'+s.nextBuildingId++;b.inventory ||= {};b.output ||= {};b.recent ||= [];}if(!a.locationReady){a.depot.stock={...a.stock};for(let b of a.plots)b.output={};a.locationReady=true;}}
+function initializeMechanics(s,a,i){a.deliveries ||= [];a.depot ||= {x:26,y:26,stock:{...a.stock}};if(!a.depot.waiting)prepareDepot(a,i);for(let b of a.plots){b.id ||= 'b'+s.nextBuildingId++;b.inventory ||= {};b.output ||= {};b.recent ||= [];}if(!a.locationReady){a.depot.stock={...a.stock};for(let b of a.plots)b.output={};a.locationReady=true;}}
 function sources(a){return [{id:'depot',x:a.depot.x,y:a.depot.y,stock:a.depot.stock},...a.plots.map(b=>({id:b.id,x:b.x,y:b.y,stock:(b.output ||= {}),building:b}))];}
 function syncLocations(a){if(a.depot)a.depot.stock={...a.stock};}
 function position(entity){let path=entity.path||[],n=Math.min(path.length-1,Math.floor(entity.progress||0));return path[n]||[entity.x||0,entity.y||0];}
@@ -375,8 +397,58 @@ export function horsePrice(a){return 100+75*((a.horses?.length||1)-1);}
 function endpoint(a,id){return id==='depot'?{...a.depot,id:'depot'}:a.plots.find(b=>b.id===id);}
 function taskRoute(a,i,d,target){let [x,y]=position(d),source=endpoint(a,d.from);let path=weightedPath(a,i,{x,y},(x,y)=>x===target.x&&y===target.y,[source,target]);d.x=x;d.y=y;d.path=path;d.progress=0;d.blocked=!path.length;}
 const woolPickupSize=10;
-function dispatchDeliveries(s,a,i){a.horses ||= [{id:'h1',x:a.depot.x,y:a.depot.y}];let jobs=[];for(let b of a.plots){for(let [g,n] of Object.entries(b.output||{}))if(n>=(b.kind==='koyun'&&g==='wool'?woolPickupSize:1)&&!a.deliveries.some(d=>d.from===b.id&&d.good===g&&d.stage!=='return'))jobs.push({from:b.id,to:'depot',good:g,wanted:b.kind==='koyun'&&g==='wool'?woolPickupSize:fleetCapacity(s.islands[a.controller]||a),last:b.lastPickup||0});for(let [g,n] of Object.entries(inputsOf(b))){let wanted=(g==='wool'?Math.max(woolPickupSize,n*(1+a.productionLevel)*3):n*(1+a.productionLevel)*3)-(b.inventory[g]||0);if(wanted>0&&a.stock[g]>0&&!a.deliveries.some(d=>d.to===b.id&&d.good===g&&d.stage!=='return'))jobs.push({from:'depot',to:b.id,good:g,wanted,last:b.lastSupply||0});}}jobs.sort((u,v)=>u.last-v.last||u.from.localeCompare(v.from)||u.to.localeCompare(v.to));for(let horse of a.horses){if(a.deliveries.some(d=>d.horseId===horse.id))continue;let job=jobs.shift();if(!job)break;let source=endpoint(a,job.from);if(!source)continue;let from={x:horse.x??a.depot.x,y:horse.y??a.depot.y};let path=weightedPath(a,i,from,(x,y)=>x===source.x&&y===source.y,[source]);if(!path.length)continue;let d={...job,horseId:horse.id,path,progress:0,amount:0,stage:'empty',x:from.x,y:from.y};a.deliveries.push(d);let b=endpoint(a,job.from==='depot'?job.to:job.from);if(b){if(job.from==='depot')b.lastSupply=s.tick+1;else b.lastPickup=s.tick+1;}}}
+function depotSpace(island,good,except){
+  const incoming=island.deliveries.reduce((n,delivery)=>n+(delivery!==except&&delivery.to==='depot'&&delivery.good===good?delivery.amount:0),0);
+  return Math.max(0,capacity(island)-island.stock[good]-(island.depot.waiting[good]||0)-incoming);
+}
+
+function drainDepot(island){
+  for(const [good,waiting] of Object.entries(island.depot.waiting)){
+    const quantity=Math.min(waiting,Math.max(0,capacity(island)-island.stock[good]));
+    island.stock[good]+=quantity;
+    if(quantity===waiting)delete island.depot.waiting[good];
+    else island.depot.waiting[good]-=quantity;
+  }
+}
+
+function dispatchDeliveries(world,island,index){
+  const limit=fleetCapacity(world.islands[island.controller]||island);
+  const jobs=[];
+  for(const building of island.plots){
+    for(const [good,quantity] of Object.entries(building.output)){
+      const batch=building.kind==='koyun'&&good==='wool'?woolPickupSize:1;
+      const reserved=island.deliveries.some(d=>d.from===building.id&&d.good===good&&d.stage==='empty');
+      if(quantity>=batch&&!reserved&&depotSpace(island,good)>0)
+        jobs.push({from:building.id,to:'depot',good,wanted:batch===1?limit:batch,last:building.lastPickup||0});
+    }
+    for(const [good,n] of Object.entries(inputsOf(building))){
+      const buffer=n*(1+island.productionLevel)*3;
+      const wanted=(good==='wool'?Math.max(woolPickupSize,buffer):buffer)-(building.inventory[good]||0);
+      const reserved=island.deliveries.some(d=>d.to===building.id&&d.good===good&&d.stage!=='return');
+      if(wanted>0&&island.stock[good]>0&&!reserved)
+        jobs.push({from:'depot',to:building.id,good,wanted,last:building.lastSupply||0});
+    }
+  }
+  jobs.sort((a,b)=>a.last-b.last||a.from.localeCompare(b.from)||a.to.localeCompare(b.to));
+  for(const horse of island.horses){
+    if(island.deliveries.some(delivery=>delivery.horseId===horse.id))continue;
+    const from={x:horse.x??island.depot.x,y:horse.y??island.depot.y};
+    while(jobs.length){
+      const job=jobs.shift();
+      const source=endpoint(island,job.from);
+      if(!source)continue;
+      if(job.from==='depot'&&!transportPath(island,index,source,endpoint(island,job.to)).length)continue;
+      const path=weightedPath(island,index,from,(x,y)=>x===source.x&&y===source.y,[source]);
+      if(!path.length)continue;
+      island.deliveries.push({...job,horseId:horse.id,path,progress:0,amount:0,stage:'empty',...from});
+      if(job.from==='depot')endpoint(island,job.to).lastSupply=world.tick+1;
+      else source.lastPickup=world.tick+1;
+      break;
+    }
+  }
+}
 function collectNearby(world,island,index,delivery,source,space){
+  space=Math.min(space,depotSpace(island,delivery.good));
   if(!space||delivery.extraPickup||delivery.to!=='depot'||delivery.from==='depot')return false;
   const reserved=new Set(island.deliveries.filter(other=>other!==delivery&&other.stage==='empty'&&other.good===delivery.good)
     .map(other=>other.from));
@@ -435,7 +507,7 @@ function advanceDeliveries(world,island,index){
     [horse.x,horse.y]=position(delivery);
     if(delivery.stage==='empty'){
       const stock=delivery.from==='depot'?island.stock:source.output;
-      const quantity=Math.min(Math.max(0,limit-delivery.amount),delivery.wanted,stock[delivery.good]||0);
+      const quantity=Math.min(Math.max(0,limit-delivery.amount),delivery.wanted,stock[delivery.good]||0,delivery.to==='depot'?Math.max(0,depotSpace(island,delivery.good,delivery)-delivery.amount):Infinity);
       stock[delivery.good]=(stock[delivery.good]||0)-quantity;
       if(delivery.from==='depot')syncLocations(island);
       delivery.amount+=quantity;
@@ -446,9 +518,10 @@ function advanceDeliveries(world,island,index){
       if(delivery.to==='depot'){
         const quantity=Math.min(delivery.amount,Math.max(0,capacity(island)-island.stock[delivery.good]));
         island.stock[delivery.good]+=quantity;
-        delivery.amount-=quantity;
+        const overflow=delivery.amount-quantity;
+        if(overflow)island.depot.waiting[delivery.good]=(island.depot.waiting[delivery.good]||0)+overflow;
+        delivery.amount=0;
         syncLocations(island);
-        if(delivery.amount)continue;
       }else{
         target.inventory ||= {};
         target.inventory[delivery.good]=(target.inventory[delivery.good]||0)+delivery.amount;
@@ -480,7 +553,21 @@ const techRows=[
 for(let id of Object.keys(technologies))delete technologies[id];for(let [id,name,cat,level,requires,cost,unlock] of techRows)technologies[id]={name,branch:CATEGORIES[cat],level,requires,cost,unlock,time:level*90,rp:(level-1)*15};
 for(let [g,p] of Object.entries({tin:12,silver:30,bronze:28,silverware:70})){if(!goods.includes(g))goods.push(g);basePrices[g]=p;}
 Object.assign(recipes,{bronz:{out:'bronze',inputs:{tin:1,copper:2},tech:'steel'},gumusisleme:{out:'silverware',inputs:{silver:2,coal:1},tech:'machinery'}});
-export function mineralChoices(a,i,b){let home=a;let out=[recipes[b.kind]?.out];if(['demir','bakir','komur'].includes(b.kind)){if(a.tech.includes('steel')&&(b.level||1)>=2&&i%2===0)out.push('tin');if(a.tech.includes('machinery')&&(b.level||1)>=3&&i%2===1)out.push('silver');}return out.filter(Boolean);}
+export function mountainDeposits(island,index){
+  return [
+    {good:'iron'},
+    ...(island.resource==='copper'?[{good:'copper'}]:[]),
+    {good:'coal',tech:'mining'},
+    index%2===0?{good:'tin',tech:'steel',mineLevel:2}:{good:'silver',tech:'machinery',mineLevel:3}
+  ];
+}
+
+export function mineralChoices(island,index,building){
+  const output=recipes[building.kind]?.out;
+  if(!['demir','bakir','komur'].includes(building.kind))return output?[output]:[];
+  return [output,...mountainDeposits(island,index).filter(deposit=>deposit.mineLevel&&
+    (building.level||1)>=deposit.mineLevel&&island.tech.includes(deposit.tech)).map(deposit=>deposit.good)];
+}
 export function fleetCapacity(a){return transportStats(a).capacity;}
 function economyInit(s,a,i){a.horses ||= [{id:'h1',x:a.depot.x,y:a.depot.y}];a.buyListings ||= {};a.needs ||= {food:20,clothes:10,tools:8};a.cityLevel ??=0;if(!a.listings){a.listings={};if(a.ai)seedMarket(s,a);}for(let g of goods){a.stock[g] ??=0;a.depot.stock[g] ??=0;}if(a.economyVersion!==2){for(let b of a.plots)for(let [g,n] of Object.entries(b.output||{}))a.stock[g]=Math.max(0,a.stock[g]-n);for(let d of a.deliveries||[])if(d.amount)a.stock[d.good]=(a.stock[d.good]||0)+d.amount;a.deliveries=[];a.economyVersion=2;syncLocations(a);}}
 export function migrate(old){
@@ -489,6 +576,9 @@ export function migrate(old){
     economyInit(world,island,index);
     island.playerProgress ??= {level:1,xp:0,goldEarned:0};
     initializeCity(island);
+    for(const listing of Object.values(island.listings)){
+      if(listing.reserved)listing.autoBuyAt ??=world.tick+180;
+    }
     if(!island.cityConsumedAt&&world.tick>=30&&Object.values(island.citySupply).some(amount=>amount>0)){
       island.cityConsumedAt=world.tick-world.tick%30;
     }
@@ -504,7 +594,8 @@ export function migrate(old){
   for(const good of goods)world.trader.stock[good] ??=100;
   return world;
 }
-export function act(s,p,m){let i=Number.isInteger(m.island)?m.island:p.island,a=s.islands[i],home=s.islands[p.island];if(a){initializeMechanics(s,a,i);economyInit(s,a,i);}if(m.type==='cityUpgrade'){upgradeCity(s,p,i,m.level);return;}
+export function act(s,p,m){let i=Number.isInteger(m.island)?m.island:p.island,a=s.islands[i],home=s.islands[p.island];if(a){initializeMechanics(s,a,i);economyInit(s,a,i);}if(m.type==='acceptTask'||m.type==='completeTask'){actPlayerTask(s,p,m);return;}
+if(m.type==='cityUpgrade'){upgradeCity(s,p,i,m.level);return;}
 if(m.type==='universityUpgrade'){upgradeUniversity(s,p,i,m.level);return;}
 if(m.type==='setListing'||m.type==='removeListing'){manageListing(s,p,i,m);return;}
 if(m.type==='buyListing'){buyListing(s,p,m);return;}
@@ -608,7 +699,7 @@ function manageListing(world,player,index,message){
   if(available<quantity)throw Error('İlan için depoda yeterli ürün yok');
   if(available-quantity>capacity(island))throw Error('Fazla ürünleri geri almak için depoda yer aç');
   island.stock[good]=available-quantity;
-  island.listings[good]={id:world.nextId++,good,quantity,gold,reserved:true};
+  island.listings[good]={id:world.nextId++,good,quantity,gold,reserved:true,autoBuyAt:world.tick+180};
   syncLocations(island);
 }
 
@@ -879,4 +970,51 @@ export function demolitionRefund(building){
   const original=building.builtCost||{wood:10,stone:5};
   return Object.fromEntries(Object.entries(original).filter(([,amount])=>amount>=2)
     .map(([good,amount])=>[good,Math.floor(amount/2)]));
+}
+
+
+export function systemSaleGold(offer){
+  return Math.min(offer.gold,basePrices[offer.good]*offer.quantity);
+}
+
+function updateTimedRewards(world){
+  for(const island of world.islands){
+    if(!Number.isInteger(island.controller))continue;
+    for(const [good,offer] of Object.entries(island.listings)){
+      if(!offer.reserved||offer.autoBuyAt===undefined||world.tick<offer.autoBuyAt)continue;
+      const gold=systemSaleGold(offer);
+      delete island.listings[good];
+      island.money+=gold;
+      island.systemSale={id:offer.id,good,quantity:offer.quantity,gold};
+    }
+  }
+  for(const player of world.players){
+    const island=world.islands[player.island];
+    if(island.playerTask?.expiresAt<=world.tick)delete island.playerTask;
+    if(world.tick%300!==0||island.playerTask)continue;
+    const sequence=Math.floor(world.tick/300)+player.island;
+    const good=['wood','stone','food','iron','wool','clothes','tools']
+      .filter(g=>['wood','stone','food'].includes(g)||island.stock[g]>=6||
+        island.plots.some(building=>(building.extract||recipes[building.kind]?.out)===g));
+    const product=good[(sequence-1)%good.length];
+    const amount=8+island.cityLevel*2+sequence%5;
+    island.playerTask={id:world.nextId++,good:product,amount,
+      gold:Math.ceil(basePrices[product]*amount*1.5),expiresAt:world.tick+300};
+  }
+}
+
+function actPlayerTask(world,player,message){
+  const island=world.islands[player.island];
+  const task=island?.playerTask;
+  if(!task||task.id!==message.id||world.tick>=task.expiresAt)throw Error('Görev sona erdi');
+  if(message.type==='acceptTask'){
+    if(task.accepted)throw Error('Görev zaten kabul edildi');
+    task.accepted=true;
+    task.expiresAt=world.tick+180;
+    return;
+  }
+  if(!task.accepted)throw Error('Önce görevi kabul et');
+  pay(island,{[task.good]:task.amount});
+  island.money+=task.gold;
+  delete island.playerTask;
 }

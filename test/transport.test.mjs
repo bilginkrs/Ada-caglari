@@ -39,3 +39,23 @@ test('A partially loaded carrier collects another matching lot within eight tile
   assert.ok(loaded>10&&loaded<=20);
   assert.equal(island.stock.wool,loaded);
 });
+
+test('A full depot parks cargo without parking the carrier, then transfers it when space clears',()=>{
+  const world=migrate();
+  const island=world.islands[0];
+  island.owner='QA';
+  island.controller=0;
+  island.stock.wood=500;
+  const {x,y}=island.depot;
+  island.deliveries.push({from:'removed-producer',to:'depot',good:'wood',amount:15,horseId:'h1',
+    stage:'loaded',x,y,path:[[x,y]],progress:0});
+  tick(world);
+  assert.equal(island.depot.waiting.wood,15);
+  assert.equal(island.deliveries[0].stage,'return');
+  tick(world);
+  assert.equal(island.deliveries.length,0);
+  island.stock.wood-=15;
+  tick(world);
+  assert.equal(island.stock.wood,500);
+  assert.equal(island.depot.waiting.wood,undefined);
+});

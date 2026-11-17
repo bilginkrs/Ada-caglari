@@ -202,3 +202,45 @@ test('City orders scale per city tier and can only be switched once per three ac
   act(world,players[0],{type:'refreshCityOrder'});
   assert.deepEqual(cityOrderGoods(buyer),{wood:35,stone:21});
 });
+
+test('A reserved lot is bought by the system after exactly 180 ticks at no more than base value',()=>{
+  let {world,seller,players}=setup();
+  const gold=seller.money;
+  act(world,players[1],{type:'setListing',good:'wood',quantity:10,gold:9999});
+  for(let i=0;i<179;i++)tick(world);
+  assert.equal(seller.money,gold);
+  assert.ok(seller.listings.wood);
+  world=migrate(structuredClone(world));
+  seller=world.islands[1];
+  tick(world);
+  assert.equal(seller.money,gold+30);
+  assert.equal(seller.listings.wood,undefined);
+  tick(world);
+  assert.equal(seller.money,gold+30);
+  assert.ok(world.islands.filter(island=>island.ai).some(island=>Object.keys(island.listings).length));
+});
+
+test('Periodic player tasks only pay once and expire three minutes after acceptance',()=>{
+  const {world,buyer,players}=setup();
+  world.tick=299;
+  tick(world);
+  const task=buyer.playerTask;
+  assert.ok(task);
+  const gold=buyer.money;
+  const complete={type:'completeTask',id:task.id};
+  assert.throws(()=>act(world,players[0],complete));
+  act(world,players[0],{type:'acceptTask',id:task.id});
+  assert.equal(task.expiresAt,480);
+  buyer.stock[task.good]=task.amount;
+  act(world,players[0],complete);
+  assert.equal(buyer.stock[task.good],0);
+  assert.equal(buyer.money,gold+task.gold);
+  assert.throws(()=>act(world,players[0],complete));
+  world.tick=599;
+  tick(world);
+  const second=buyer.playerTask;
+  act(world,players[0],{type:'acceptTask',id:second.id});
+  world.tick=779;
+  tick(world);
+  assert.equal(buyer.playerTask,undefined);
+});
