@@ -17,7 +17,18 @@ export function occupied(a,x,y){return a.plots.find(b=>x>=b.x&&y>=b.y&&x<b.x+(b.
 export function resourceTarget(kind,t){return kind==='oduncu'?t==='forest':kind==='tas'?t==='rock':['demir','bakir','komur'].includes(kind)?t==='mountain':false;}
 export function workPath(b,island=0,a={plots:[],roads:[]}){if(!['oduncu','tas','demir','bakir','komur'].includes(b.kind))return null;return weightedPath(a,island,{x:b.x,y:b.y},(x,y)=>resourceTarget(b.kind,terrain(x,y,island,a))&&!occupied(a,x,y),[b]);}
 export function cycleLength(b){return Math.max(2,Math.ceil((b.path?Math.max(1,b.path.length-1)*2+4:b.kind==='koyun'?Math.max(2,Math.round(4*100/(b.fertility||100))):4)/(1+.25*((b.level||1)-1))*(b.roadFactor||1)));}
-export function pay(a,cost){for(let [g,n] of Object.entries(cost))if((a.stock[g]||0)<n)throw Error('Yetersiz malzeme');for(let [g,n] of Object.entries(cost))a.stock[g]-=n;}
+export function availableMaterial(island,good){
+  return good==='gold'?island.money:island.stock[good]||0;
+}
+export function pay(island,cost){
+  for(const [good,amount] of Object.entries(cost)){
+    if(availableMaterial(island,good)<amount)throw Error(good==='gold'?'Yetersiz altın':'Yetersiz malzeme');
+  }
+  for(const [good,amount] of Object.entries(cost)){
+    if(good==='gold')island.money-=amount;
+    else island.stock[good]-=amount;
+  }
+}
 export function depotContains(island,x,y){
   const yard=island.depot?.yard??{x:25,y:25};
   return x>=yard.x&&x<yard.x+2&&y>=yard.y&&y<yard.y+2;
@@ -199,7 +210,7 @@ Object.assign(technologies,{
  logistics:{name:'Deniz lojistiği',cost:{steel:20,tools:15},requires:['navigation','steel'],unlock:'Deniz yolculuğu 30 → 20 saniye',time:180,rp:25,branch:'Denizcilik'}
 });for(let [id,t] of Object.entries(technologies)){t.branch ||= 'Metalürji';t.time ||= {mining:90,steel:150,machinery:240}[id]||90;t.rp ??=id==='mining'?0:id==='steel'?10:25;}
 function migrateDepth(old){let s=migrateBase(old);for(let g of goods)s.trader.stock[g] ??=200;s.players.forEach(p=>{let a=s.islands[p.island];a.controller ??=p.island});s.islands.forEach(a=>{a.controller ??=null;a.roads ||= [];a.rp ??=0;a.research ||=null;for(let b of a.plots)b.level ||=1;});return s}
-export function upgradeBuildingCost(b){return {wood:20*(b.level||1),stone:15*(b.level||1),...(b.level>=2?{tools:5*b.level}:{})}}
+export function upgradeBuildingCost(b){return {wood:20*(b.level||1),stone:15*(b.level||1),...(b.level>=2?{tools:5*b.level}:{}),...(b.level>=3?{gold:50*(b.level-2)}:{})}}
 function owning(s,p,i){return i===p.island||s.islands[i]?.controller===p.island}
 function actDepth(s,p,m){let i=Number.isInteger(m.island)?m.island:p.island,a=s.islands[i],home=s.islands[p.island];if(m.type==='colonize'){if(!a||a.owner||i<2)throw Error('Boş bir ada seç');if(!home.tech.includes('navigation'))throw Error('Denizcilik araştırması gerekli');let sh=s.ships.find(sh=>sh.owner===p.island&&sh.stage==='home'&&!sh.enabled&&!sh.contract&&!loadCount(sh));if(!sh||!port(home))throw Error('Ana limanda boş ve durdurulmuş gemi gerekli');if(home.money<200)throw Error('200 altın gerekli');pay(home,{wood:60,stone:40,tools:10});home.money-=200;sh.expedition={to:i,remaining:45};sh.stage='expedition';sh.status='Koloni seferi';return;}
 if(!owning(s,p,i))throw Error('Bu ada sana ait değil');if(m.type==='road'){if(!Number.isInteger(m.x)||!Number.isInteger(m.y)||!['grass','forest','rock'].includes(terrain(m.x,m.y,i,a))||occupied(a,m.x,m.y))throw Error('Yola uygun boş kara seç');let k=m.x+','+m.y;if(a.roads.includes(k))throw Error('Yol zaten var');pay(a,{stone:1});a.roads.push(k);return;}
@@ -546,7 +557,7 @@ const techRows=[
 ['breeding','Koyun yetiştiriciliği',1,1,[],{wood:25,food:20},'Yün üretimi +%15'],['husbandry','İleri hayvancılık',1,2,['breeding','farming'],{tools:10,clothes:15},'Çiftlik döngüsü hızlanır'],['ranching','Büyük çiftlikler',1,3,['husbandry','irrigation'],{steel:20,tools:20},'Yün üretimi +%30'],
 ['fishing','Balıkçılık bilgisi',2,1,[],{wood:25,stone:15},'Balık üretimi +%15'],['nets','Gelişmiş ağlar',2,2,['fishing','breeding'],{yarn:25,tools:10},'Balık üretimi +%25'],['aquaculture','Su ürünleri',2,3,['nets','machinery'],{machines:10,steel:20},'Balık üretimi +%40'],
 ['mining','Derin madencilik',3,1,[],{wood:50,stone:50,iron:20},'Kömür ve demirci'],['steel','Metalürji II',3,2,['mining','craft'],{iron:40,coal:30},'Kalay, çelik, seviye 2 maden'],['machinery','Metalürji III',3,3,['steel','engineering'],{steel:40,copper:30},'Gümüş, makine, seviye 3 maden'],
-['navigation','Denizcilik',4,1,[],{wood:60,clothes:10},'Koloni seferleri'],['cartography','Haritacılık',4,2,['navigation','mining'],{tools:15,clothes:20},'Gemi kapasitesi 30'],['logistics','Deniz lojistiği',4,3,['cartography','steel'],{steel:20,tools:15},'Yolculuk 20 saniye, kapasite 40'],
+['navigation','Denizcilik',4,1,[],{wood:60,clothes:10},'Koloni seferleri'],['cartography','Haritacılık',4,2,['navigation','mining'],{tools:15,clothes:20},'Tek yön 50 saniye, kapasite 30'],['logistics','Deniz lojistiği',4,3,['cartography','steel'],{steel:20,tools:15},'Tek yön 40 saniye, kapasite 40'],
 ['hauling','Kara taşımacılığı',5,1,[],{wood:30,stone:20},'At yükü 25'],['wagons','Büyük arabalar',5,2,['hauling','craft'],{tools:20,iron:20},'At yükü 35'],['distribution','Dağıtım ağı',5,3,['wagons','engineering'],{steel:25,machines:5},'At yükü 50'],
 ['craft','Zanaatkârlık',6,1,[],{wood:30,stone:25},'Atölyeler +%10 hızlı'],['engineering','Mühendislik',6,2,['craft','mining'],{tools:20,copper:20},'Atölyeler +%20 hızlı'],['industry','Sanayi',6,3,['engineering','machinery'],{machines:15,steel:30},'Atölyeler +%35 hızlı'],
 ['council','Şehir meclisi',7,1,[],{food:30,clothes:10},'Şehir siparişlerinden +%10 altın'],['commerce','Ticaret loncası',7,2,['council','navigation'],{tools:20,clothes:25},'Şehir siparişlerinden +%20 altın'],['academy','Akademi',7,3,['commerce','engineering'],{machines:10,silver:15},'Araştırma süresi %25 kısa']];
@@ -896,7 +907,7 @@ const advancedEffects={
   'Hayvancılık':'Yün üretim hızı +7 puan',
   'Balıkçılık':'Balık üretim hızı +7 puan',
   'Metalürji':'Metal atölyelerinin üretim hızı +7 puan',
-  'Denizcilik':'Gemi kapasitesi +5 · Tek yön yolculuk −1 sn',
+  'Denizcilik':'Gemi kapasitesi +5 · Tek yön yolculuk −2 sn',
   'Lojistik':'Araç kapasitesi +10 · Hız +0,12×',
   'Üretim':'Atölyelerin üretim hızı +7 puan',
   'Şehir':'Sipariş altın bonusu +3 puan · Araştırma süresi kısalır'
@@ -931,14 +942,20 @@ for(const [branch,nodes] of Object.entries(advancedBranches)){
     previous=id;
   }
 }
-for(const tech of Object.values(technologies))tech.cityLevel=Math.max(0,tech.level-(tech.level>=9?1:2));
+for(const tech of Object.values(technologies)){
+  tech.cityLevel=Math.max(0,tech.level-(tech.level>=9?1:2));
+  if(tech.level>=3)tech.cost.gold=60*(tech.level-2);
+}
+for(const [level,tier] of cityTiers.entries())if(level>=3)tier.cost.gold=100*(level-2);
+universityTiers[2].cost.gold=120;
+universityTiers[3].cost.gold=250;
 
 function advancedLevels(island,branch){
   return island.tech.reduce((count,id)=>count+Number(technologies[id]?.branch===branch&&!!technologies[id].extension),0);
 }
 
 export function voyageSeconds(island){
-  return island.tech.includes('logistics')?20-advancedLevels(island,'Denizcilik'):30;
+  return island.tech.includes('logistics')?40-2*advancedLevels(island,'Denizcilik'):island.tech.includes('cartography')?50:60;
 }
 
 function seaCapacity(island){
@@ -974,7 +991,7 @@ export function demolitionRefund(building){
 
 
 export function systemSaleGold(offer){
-  return Math.min(offer.gold,basePrices[offer.good]*offer.quantity);
+  return Math.min(offer.gold,offer.quantity);
 }
 
 function updateTimedRewards(world){

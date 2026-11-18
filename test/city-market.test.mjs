@@ -48,7 +48,7 @@ test('Port purchase reserves the advertised lot and total gold, survives a reloa
   world=migrate(structuredClone(world));
   ({0:buyer,1:seller}=world.islands);
   ship=world.ships[0];
-  for(let i=0;i<31;i++)shipTick(world,ship);
+  for(let i=0;i<61;i++)shipTick(world,ship);
   assert.equal(ship.stage,'dock');
   assert.equal(ship.portOrder.delivered,false);
   assert.equal(seller.money,sellerCash);
@@ -56,7 +56,7 @@ test('Port purchase reserves the advertised lot and total gold, survives a reloa
   assert.equal(ship.load.wood,10);
   assert.equal(seller.money,sellerCash+5);
   buyer.stock.wood=capacity(buyer);
-  for(let i=0;i<40;i++)shipTick(world,ship);
+  for(let i=0;i<70;i++)shipTick(world,ship);
   assert.equal(ship.load.wood,10);
   buyer.stock.wood-=10;
   shipTick(world,ship);
@@ -140,7 +140,7 @@ test('A buy request escrows gold, survives reload, and pays the seller only on d
   world=migrate(structuredClone(world));
   const ship=world.ships[1];
   [buyer,seller]=world.islands;
-  for(let step=0;step<30;step++)shipTick(world,ship);
+  for(let step=0;step<60;step++)shipTick(world,ship);
   assert.equal(seller.money,sellerGold);
   assert.equal(ship.stage,'dock');
   buyer.stock.wood=capacity(buyer);
@@ -166,7 +166,7 @@ test('All ten city tiers can unlock the preceding technologies and goods without
   };
   for(const id of Object.keys(technologies))assert.ok(traceTechnology(id,new Set()),id);
   const researched=new Set();
-  const producible=new Set(['tin','silver','wood','stone']);
+  const producible=new Set(['tin','silver','wood','stone','gold']);
   for(let index=0;index<cityTiers.length;index++){
     for(let n=0;n<Object.keys(technologies).length;n++){
       for(const [id,tech] of Object.entries(technologies)){
@@ -203,7 +203,7 @@ test('City orders scale per city tier and can only be switched once per three ac
   assert.deepEqual(cityOrderGoods(buyer),{wood:35,stone:21});
 });
 
-test('A reserved lot is bought by the system after exactly 180 ticks at no more than base value',()=>{
+test('A reserved lot is bought by the system after exactly 180 ticks at one gold per item',()=>{
   let {world,seller,players}=setup();
   const gold=seller.money;
   act(world,players[1],{type:'setListing',good:'wood',quantity:10,gold:9999});
@@ -213,10 +213,10 @@ test('A reserved lot is bought by the system after exactly 180 ticks at no more 
   world=migrate(structuredClone(world));
   seller=world.islands[1];
   tick(world);
-  assert.equal(seller.money,gold+30);
+  assert.equal(seller.money,gold+10);
   assert.equal(seller.listings.wood,undefined);
   tick(world);
-  assert.equal(seller.money,gold+30);
+  assert.equal(seller.money,gold+10);
   assert.ok(world.islands.filter(island=>island.ai).some(island=>Object.keys(island.listings).length));
 });
 
@@ -243,4 +243,20 @@ test('Periodic player tasks only pay once and expire three minutes after accepta
   world.tick=779;
   tick(world);
   assert.equal(buyer.playerTask,undefined);
+});
+
+test('An advanced city upgrade requires gold without removing materials on failure',()=>{
+  const {world,buyer,players}=setup();
+  buyer.cityLevel=2;
+  Object.assign(buyer.stock,cityTiers[3].cost);
+  delete buyer.stock.gold;
+  const stock={...buyer.stock};
+  buyer.money=99;
+  const upgrade={type:'cityUpgrade',level:3};
+  assert.throws(()=>act(world,players[0],upgrade),/Yetersiz altın/);
+  assert.deepEqual(buyer.stock,stock);
+  buyer.money=100;
+  act(world,players[0],upgrade);
+  assert.equal(buyer.money,0);
+  assert.equal(buyer.cityLevel,3);
 });
